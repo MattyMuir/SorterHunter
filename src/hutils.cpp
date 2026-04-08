@@ -26,7 +26,10 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 #include "hutils.h"
+
 #include <cstdio>
+
+#include "print.h"
 
 /**
  * Create orthogonal convex hull
@@ -53,13 +56,13 @@ bool OCH_t::improved(u32 l, u32 d)
 {
 	bool matched=false;
 	
-	for(size_t k=0;k<och.size();k++)
+	for (size_t k=0;k<och.size();k++)
 	{
-		if((l>=och[k].size)&&(d>=och[k].depth))
+		if ((l>=och[k].size)&&(d>=och[k].depth))
 			matched=true;
 	}
 	
-	if(matched)
+	if (matched)
 		return false;
 	
 	std::vector<OCH_Entry> newch;
@@ -68,9 +71,9 @@ bool OCH_t::improved(u32 l, u32 d)
 	ce.depth=d;
 	newch.push_back(ce);
 
-	for(size_t k=0;k<och.size();k++)
+	for (size_t k=0;k<och.size();k++)
 	{
-		if((och[k].size<l)||(och[k].depth<d))
+		if ((och[k].size<l)||(och[k].depth<d))
 		{
 			newch.push_back(och[k]);
 		}
@@ -86,13 +89,13 @@ bool OCH_t::improved(u32 l, u32 d)
  */
 void OCH_t::print() const
 {
-	printf("Most performant: [");
-	for(size_t k=0;k<och.size();k++)
+	PRINT("Most performant: [");
+	for (size_t k=0;k<och.size();k++)
 	{
-		printf("(%u,%u)",och[k].size,och[k].depth);
-		printf("%c", (k<(och.size()-1)) ? ',':']');		
+		PRINT("({},{})",och[k].size,och[k].depth);
+		PRINT("{}", (k<(och.size()-1)) ? ',':']');		
 	}
-	printf("\r\n");
+	PRINT("\r\n");
 	
 }
 
@@ -103,15 +106,15 @@ u32 computeDepth(const Network_t &nw)
 	std::vector<SortWord_t> layers;
 	int nlayers=0;
 	
-	for(size_t k=0;k<nw.size();k++)
+	for (size_t k=0;k<nw.size();k++)
 	{
 		u32 i=nw[k].lo;
 		u32 j=nw[k].hi;
 		int matchidx=nlayers;
 		int idx=nlayers-1;
-		while(idx>=0)
+		while (idx>=0)
 		{
-			if((layers[idx] & ((1ULL<<i)|(1ULL<<j))) == 0)
+			if ((layers[idx] & ((1ULL<<i)|(1ULL<<j))) == 0)
 			{
 				matchidx=idx;
 			}
@@ -121,7 +124,7 @@ u32 computeDepth(const Network_t &nw)
 			}
 			idx--;
 		}
-		if(matchidx>=nlayers)
+		if (matchidx>=nlayers)
 		{
 			layers.push_back(0);
 			nlayers++;
@@ -136,22 +139,22 @@ u32 computeDepth(const Network_t &nw)
 
 void printnw(const Network_t &nw)
 {
-	printf("[");
-	for(size_t k=0;k<nw.size();k++)
+	PRINT("[");
+	for (size_t k=0;k<nw.size();k++)
 	{
-		printf("(%u,%u)",nw[k].lo,nw[k].hi);
-		printf("%c", ((k+1)<nw.size()) ? ',':']');
+		PRINT("({},{})",nw[k].lo,nw[k].hi);
+		PRINT("{}", ((k+1)<nw.size()) ? ',':']');
 	}
-	printf("}\r\n");
+	PRINT("}}\r\n");
 }
 
 void symmetricExpansion(u8 ninputs, const Network_t &inpairs, Network_t &outpairs)
 {
 	outpairs.clear();
-	for(size_t k=0;k<inpairs.size();k++)
+	for (size_t k=0;k<inpairs.size();k++)
 	{
 		outpairs.push_back(inpairs[k]);
-		if((inpairs[k].lo+inpairs[k].hi)!=(ninputs-1)) // Don't duplicate pair that maps on itself
+		if ((inpairs[k].lo+inpairs[k].hi)!=(ninputs-1)) // Don't duplicate pair that maps on itself
 		{
 			Pair_t sp={(u8)(ninputs-1-inpairs[k].hi), (u8)(ninputs-1-inpairs[k].lo)};
 			outpairs.push_back(sp);
@@ -169,9 +172,8 @@ void concatNetwork(const Network_t &nw1, const Network_t &nw2, Network_t &result
 
 void appendNetwork(Network_t &dst, const Network_t &src)
 {
-	if(src.size()>0)
+	if (!src.empty())
 	{
 		dst.insert(dst.end(),src.begin(),src.end());
 	}
 }
-

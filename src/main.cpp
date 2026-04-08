@@ -28,10 +28,7 @@
  */
 
 
-#define VERSION "SorterHunter_V0.4"
-
-#include "htypes.h"
-#include "hutils.h"
+#define VERSION "SorterHunter_V0.4_MUIR"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -40,44 +37,46 @@
 #include <vector>
 #include <algorithm>
 #include <random>
-#include "ConfigParser.h"
 #include <ctime>
+
+#include "htypes.h"
+#include "hutils.h"
+#include "ConfigParser.h"
 #include "prefix_processor.h"
+#include "print.h"
 
 ConfigParser cp;
 
-bool use_symmetry = true; ///< Treat sorting network as symmetric or not
-bool force_valid_uphill_step = true; ///< "Uphill" step inserts duplicate CE if not in final layer.
-u8 N = 0;                   ///< Problem dimension, i.e. number of inputs to be sorted
-u32 EscapeRate = 0;         ///< Adds a random pair (and its symmetric complement for symmetric networks) every x iterations
-u32 MaxMutations = 1;       ///< Maximum allowed number of mutations in evolution step
-u32 PrefixType = 0;         ///< Type of prefix used (0=none, 1=fixed, 2=greedy)
-Network_t FixedPrefix;    ///< Fixed prefix to use (if applicable)
-Network_t InitialNetwork; ///< Initial starting point of network
-u32 GreedyPrefixSize = 0;   ///< Size of greedy prefix (if applicable)
-OCH_t conv_hull;          ///< "Best performing" network list found so far
-uint64_t RandomSeed;      ///< Random seed
-uint64_t RestartRate;     ///< Return to initial conditions each ... iterations (0=never)
-u32 Verbosity = 1;          ///< Overall verbosity level: 0:minimal, 1:moderate, 2:high, >2:debug        
+bool use_symmetry = true;					/// Treat sorting network as symmetric or not
+bool force_valid_uphill_step = true;		/// "Uphill" step inserts duplicate CE if not in final layer.
+u8 N = 0;									/// Problem dimension, i.e. number of inputs to be sorted
+u32 EscapeRate = 0;							/// Adds a random pair (and its symmetric complement for symmetric networks) every x iterations
+u32 MaxMutations = 1;						/// Maximum allowed number of mutations in evolution step
+u32 PrefixType = 0;							/// Type of prefix used (0=none, 1=fixed, 2=greedy)
+Network_t FixedPrefix;						/// Fixed prefix to use (if applicable)
+Network_t InitialNetwork;					/// Initial starting point of network
+u32 GreedyPrefixSize = 0;					/// Size of greedy prefix (if applicable)
+OCH_t conv_hull;							/// "Best performing" network list found so far
+uint64_t RandomSeed;						/// Random seed
+uint64_t RestartRate;						/// Return to initial conditions each ... iterations (0=never)
+u32 Verbosity = 1;							/// Overall verbosity level: 0:minimal, 1:moderate, 2:high, >2:debug        
 
 // Working set of pairs in the sorting network
-Network_t pairs; ///< Current core network: evolving section between prefix and postfix. For symmetric networks, mirrored pair (if not coinciding) is omitted.
-Network_t se; ///< Symmetrical expansion of current network
+Network_t pairs;							/// Current core network: evolving section between prefix and postfix. For symmetric networks, mirrored pair (if not coinciding) is omitted.
+Network_t se;								/// Symmetrical expansion of current network
 Network_t newpairs;
-Network_t prefix; ///< Fixed, greedy, hybrid or empty prefix network
-Network_t postfix; ///< Fixed or empty postfix network
+Network_t prefix;							/// Fixed, greedy, hybrid or empty prefix network
+Network_t postfix;							/// Fixed or empty postfix network
 
 // Set of all possible pairs, unique taking into account symmetric complements
 Network_t alphabet;
 
-#define NMUTATIONTYPES 6 ///< Number of different mutation types
-u32 mutation_type_weights[NMUTATIONTYPES]; ///< Relative probabilities for each mutation type
-std::vector<u8> mutationSelector; ///< Helper variable to quickly pick a mutation with the requested probability.
+#define NMUTATIONTYPES 6					///< Number of different mutation types
+u32 mutation_type_weights[NMUTATIONTYPES];	///< Relative probabilities for each mutation type
+std::vector<u8> mutationSelector;			///< Helper variable to quickly pick a mutation with the requested probability.
 
 // Random generation
-std::random_device rd;
-RandGen_t mtRand(rd()); // Mersenne twister is a rather good PRNG. Seeding quality varies between systems, but OK ; this is no crypto application.
-
+RandGen_t mtRand(std::random_device{}());
 
 /**
  * Send a bit-parallel set of test patterns through a sorting network. Maximum PARWORDSIZE patterns are processed
@@ -300,7 +299,7 @@ bool testInitialPairsFromPrefixOutput(const Network_t& pairs, const BitParallelL
  * @param ninputs Number of inputs
  * @return Filtered input network
  */
-static const Network_t copyValidPairs(const Network_t& nw, u32 ninputs)
+static Network_t copyValidPairs(const Network_t& nw, u32 ninputs)
 {
 	static Network_t result;
 	result.clear();
@@ -325,7 +324,7 @@ void fillprefixGreedyA(Network_t& prefix, u32 npairs)
 	SortWord_t sizetmp = createGreedyPrefix(N, npairs, use_symmetry, prefix, mtRand);
 	if (Verbosity > 1)
 	{
-		printf("Greedy prefix size %lu, span %lu.\n", prefix.size(), (size_t)sizetmp);
+		PRINT("Greedy prefix size {}, span {}.\n", prefix.size(), (size_t)sizetmp);
 	}
 }
 
@@ -340,7 +339,7 @@ void fillprefixFixedThenGreedyA(Network_t& prefix, u32 npairs)
 	SortWord_t sizetmp = createGreedyPrefix(N, npairs + prefix.size(), use_symmetry, prefix, mtRand);
 	if (Verbosity > 2)
 	{
-		printf("Hybrid prefix size %lu, span %lu.\n", prefix.size(), (size_t)sizetmp);
+		PRINT("Hybrid prefix size {}, span {}.\n", prefix.size(), (size_t)sizetmp);
 	}
 }
 
@@ -358,7 +357,7 @@ u32 attemptMutation(Network_t& newpairs)
 	switch (mtype)
 	{
 	case 1:
-		if (newpairs.size() > 0)   // Removal of random pair from list
+		if (!newpairs.empty())   // Removal of random pair from list
 		{
 			u32 a = RANDIDX(newpairs);
 			newpairs.erase(newpairs.begin() + a);
@@ -409,7 +408,7 @@ u32 attemptMutation(Network_t& newpairs)
 		}
 		break;
 	case 3:
-		if (newpairs.size() > 0)  // Replace a pair at a random position with another random pair
+		if (!newpairs.empty())  // Replace a pair at a random position with another random pair
 		{
 			u32 a = RANDIDX(newpairs);
 			Pair_t p = RANDELEM(alphabet);
@@ -468,7 +467,7 @@ u32 attemptMutation(Network_t& newpairs)
 		}
 		break;
 	case 6:
-		if (newpairs.size() > 0) // Change one half of a pair - special case of type r=3.
+		if (!newpairs.empty()) // Change one half of a pair - special case of type r=3.
 		{
 			u32 a = RANDIDX(newpairs);
 			Pair_t p = newpairs[a];
@@ -504,7 +503,7 @@ static void checkImproved(const Network_t& nw)
 		/* Print only if the sorter is an improved (size,depth) combination */
 		if ((Verbosity > 1) || (nw.size() <= ((N * (N - 1u)) / 2u))) // Reduce rubbish listing. Should at least compete with bubble sort before reporting
 		{
-			printf(" {'N':%u,'L':%lu,'D':%u,'sw':'%s','ESC':%u,'Prefix':%lu,'Postfix':%lu,'nw':", N, nw.size(), depth, VERSION, EscapeRate, prefix.size(), postfix.size());
+			PRINT(" {{'N':{},'L':{},'D':{},'sw':'{}','ESC':{},'Prefix':{},'Postfix':{},'nw':", N, nw.size(), depth, VERSION, EscapeRate, prefix.size(), postfix.size());
 			printnw(nw);
 			conv_hull.print();
 		}
@@ -516,11 +515,11 @@ static void checkImproved(const Network_t& nw)
  */
 static void usage()
 {
-	printf("Usage: SorterHunter <config_file_name>\n\n");
-	printf("A sample config file containing help text is provided, named 'sample_config.txt'\n");
-	printf("SorterHunter is a program that tries to find efficient sorting networks by applying\n");
-	printf("an evolutionary approach. It is offered under MIT license\n");
-	printf("Program version: %s\n", VERSION);
+	PRINT("Usage: SorterHunter <config_file_name>\n\n");
+	PRINT("A sample config file containing help text is provided, named 'sample_config.txt'\n");
+	PRINT("SorterHunter is a program that tries to find efficient sorting networks by applying\n");
+	PRINT("an evolutionary approach. It is offered under MIT license\n");
+	PRINT("Program version: {}\n", VERSION);
 	exit(1);
 }
 
@@ -546,7 +545,7 @@ int main(int argc, char* argv[])
 	/* Process configuration file */
 	if (!cp.parseConfig(argv[1]))
 	{
-		printf("Error parsing config options.\n");
+		PRINT("Error parsing config options.\n");
 		return -1;
 	}
 
@@ -572,9 +571,9 @@ int main(int argc, char* argv[])
 		for (u32 k = 0; k < mutation_type_weights[n]; k++)
 			mutationSelector.push_back(n);
 	}
-	if (mutationSelector.size() == 0)
+	if (mutationSelector.empty())
 	{
-		printf("No mutation types selected.\n");
+		PRINT("No mutation types selected.\n");
 		exit(1);
 	}
 	PrefixType = cp.getInt("PrefixType", 0);
@@ -588,7 +587,7 @@ int main(int argc, char* argv[])
 	{
 		if (Verbosity > 0)
 		{
-			printf("Warning: option 'Symmetric' ignored for odd number of inputs\n");
+			PRINT("Warning: option 'Symmetric' ignored for odd number of inputs\n");
 		}
 		use_symmetry = false;
 	}
@@ -614,9 +613,7 @@ int main(int argc, char* argv[])
 	}
 
 	if (Verbosity > 0)
-	{
-		printf("Prefix size: %lu\n", prefix.size());
-	}
+		PRINT("Prefix size: {}\n", prefix.size());
 
 	/* Prepare a set of test vectors matching the prefix */
 	prepareTestVectorsFromPrefix(prefix);
@@ -645,7 +642,7 @@ int main(int argc, char* argv[])
 
 			Pair_t p;
 
-			if (postfix.size() == 0) // Empty postfix: find a pattern that fixes an arbitrary inversion in the first failed output
+			if (postfix.empty()) // Empty postfix: find a pattern that fixes an arbitrary inversion in the first failed output
 			{
 				bool found_useful_ce = false;
 				do
@@ -675,9 +672,7 @@ int main(int argc, char* argv[])
 		concatNetwork(prefix, se, totalnw);
 
 		if (Verbosity > 1)
-		{
-			printf("Initial network size: %lu\n", totalnw.size());
-		}
+			PRINT("Initial network size: {}\n", totalnw.size());
 
 		checkImproved(totalnw);
 
@@ -694,7 +689,7 @@ int main(int argc, char* argv[])
 					{
 						double t = (t2 - t0) / (double)CLOCKS_PER_SEC;
 						double dt = (t2 - t1) / (double)CLOCKS_PER_SEC;
-						printf("Iteration %lu  t=%.3lf s     %.1lf it/s\n", itercount, t, (iter_next_report - iter_last_report) / dt);
+						PRINT("Iteration {}  t={:.3f} s     {:.1f} it/s\n", itercount, t, (iter_next_report - iter_last_report) / dt);
 					}
 
 					t1 = t2;
@@ -737,7 +732,7 @@ int main(int argc, char* argv[])
 			appendNetwork(se, postfix);
 
 			/* Test whether the new postfix network yields a valid sorter when combined with the prefix */
-			if ((se.size() > 0) && testpairsFromPrefixOutput(se, parallelpatterns_from_prefix))
+			if (!se.empty() && testpairsFromPrefixOutput(se, parallelpatterns_from_prefix))
 			{
 				concatNetwork(prefix, se, totalnw);
 
@@ -778,7 +773,7 @@ int main(int argc, char* argv[])
 			{
 				if (Verbosity > 1)
 				{
-					printf("Restart.\n");
+					PRINT("Restart.\n");
 				}
 				switch (PrefixType) // Recompute prefix if not fixed
 				{

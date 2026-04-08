@@ -26,11 +26,13 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "hutils.h"
-#include "prefix_processor.h"
 #include <algorithm>
 #include <cstdio>
 #include <cassert>
+
+#include "hutils.h"
+#include "prefix_processor.h"
+#include "print.h"
 
 extern u32 Verbosity;
 
@@ -54,39 +56,39 @@ static void swap_sortedpatterns( SinglePatternList_t &patterns, const Pair_t &pa
 	size_t l=patterns.size();
 	SortWord_t last=-1;
 	
-	while((idxp<l) &&((patterns[idxp] &mask)!=p)) { idxp++; }
-	while((idxnp<l)&&((patterns[idxnp]&mask)==p)) { idxnp++; }
+	while ((idxp<l) &&((patterns[idxp] &mask)!=p)) { idxp++; }
+	while ((idxnp<l)&&((patterns[idxnp]&mask)==p)) { idxnp++; }
 	
-	while((idxnp<l)&&(idxp<l))
+	while ((idxnp<l)&&(idxp<l))
 	{
 		SortWord_t a=patterns[idxp]^mask;
 		SortWord_t b=patterns[idxnp];
-		if(a<b)
+		if (a<b)
 		{
-			if(a!=last)
+			if (a!=last)
 			{
 				res.push_back(a);
 				last=a;
 			}
 			idxp++;
-			while((idxp<l)&&((patterns[idxp]&mask)!=p)) { idxp++; }
+			while ((idxp<l)&&((patterns[idxp]&mask)!=p)) { idxp++; }
 		}
 		else
 		{
-			if(a!=last)
+			if (a!=last)
 			{
 				res.push_back(b);
 				last=b;
 			}
 			idxnp++;
-			while((idxnp<l)&&((patterns[idxnp]&mask)==p)) { idxnp++; }
+			while ((idxnp<l)&&((patterns[idxnp]&mask)==p)) { idxnp++; }
 		}
 	}
-	while(idxnp<l)
+	while (idxnp<l)
 	{
 		res.push_back(patterns[idxnp++]);
 	}
-	while(idxp<l)
+	while (idxp<l)
 	{
 		res.push_back(patterns[idxp++]^mask);
 	}
@@ -116,7 +118,7 @@ class ClusterGroup{
 		bool isSameCluster(Pair_t p) const;
 		~ClusterGroup();
 	private:
-		void combine(u8 i, u8 j);
+		void combine(u8 ci_idx, u8 cj_idx);
 		
 		SinglePatternList_t *patternlists; ///< Sorted list of output patterns from each cluster of lines
 		SortWord_t *masks; ///< Masks for each cluster marking the applicable lines for each cluster
@@ -146,7 +148,7 @@ ClusterGroup::ClusterGroup(const ClusterGroup &cg)
 	patternlists = new SinglePatternList_t[ninputs];
 	masks = new SortWord_t[ninputs];
 	clusterAlloc = new u8[ninputs];
-	for(u32 k=0;k<ninputs;k++)
+	for (u32 k=0;k<ninputs;k++)
 	{
 		patternlists[k] = cg.patternlists[k];
 		masks[k]=cg.masks[k];
@@ -160,7 +162,7 @@ ClusterGroup::ClusterGroup(const ClusterGroup &cg)
 const ClusterGroup& ClusterGroup::operator=(const ClusterGroup &cg)
 {
 	ninputs = cg.ninputs;
-	for(u32 k=0;k<ninputs;k++)
+	for (u32 k=0;k<ninputs;k++)
 	{
 		patternlists[k] = cg.patternlists[k];
 		masks[k]=cg.masks[k];
@@ -186,7 +188,7 @@ ClusterGroup::~ClusterGroup()
  */
 void ClusterGroup::clear()
 {
-	for(u32 k=0;k<ninputs;k++)
+	for (u32 k=0;k<ninputs;k++)
 	{
 		clusterAlloc[k]=k;
 		masks[k]=1ULL<<k;
@@ -207,8 +209,8 @@ void ClusterGroup::combine(u8 ci_idx, u8 cj_idx)
 	SinglePatternList_t &p1=patternlists[ci_idx];
 	SinglePatternList_t &p2=patternlists[cj_idx];
 	
-	for(u32 k=0;k<ninputs;k++)
-		if(clusterAlloc[k]==cj_idx)
+	for (u32 k=0;k<ninputs;k++)
+		if (clusterAlloc[k]==cj_idx)
 			clusterAlloc[k]=ci_idx; // ci will take over
 	
 	masks[ci_idx]|=masks[cj_idx];
@@ -220,8 +222,8 @@ void ClusterGroup::combine(u8 ci_idx, u8 cj_idx)
 	 * in order generation that had lower theoretical complexity. For practical sizes however
 	 * a quicksort proved a faster and simpler alternative. (and probably has less bugs :-) )
 	 */
-	for(size_t i=0;i<p1.size();i++)
-		for(size_t j=0;j<p2.size();j++)
+	for (size_t i=0;i<p1.size();i++)
+		for (size_t j=0;j<p2.size();j++)
 			cp.push_back( p1[i] | p2[j]);
 	std::sort(cp.begin(),cp.end()); // Keep the new output set sorted
 	p1=cp;
@@ -247,7 +249,7 @@ void ClusterGroup::preSort(Pair_t p)
 	u32	ci_idx=clusterAlloc[p.lo];
 	u32 cj_idx=clusterAlloc[p.hi];
 	
-	if(ci_idx!=cj_idx)
+	if (ci_idx!=cj_idx)
 	{
 		combine(ci_idx,cj_idx);
 	}
@@ -264,9 +266,9 @@ void ClusterGroup::computeOutputs(SinglePatternList_t &patterns) const
 	const static SinglePatternList_t *pLists[NMAX];
 	int n_to_combine=0;
 	
-	for(u32 k=0;k<ninputs;k++)
+	for (u32 k=0;k<ninputs;k++)
 	{
-		if(masks[k]!=0)
+		if (masks[k]!=0)
 			pLists[n_to_combine++] = &patternlists[k];
 	}
 	
@@ -277,15 +279,15 @@ void ClusterGroup::computeOutputs(SinglePatternList_t &patterns) const
 	SortWord_t outmasks[NMAX]={0};
 	patterns.clear();
 	
-	while(level>=0)
+	while (level>=0)
 	{	
-		if(indices[level]< pLists[level]->size())
+		if (indices[level]< pLists[level]->size())
 		{
-			if(level==0)
+			if (level==0)
 				outmasks[level] = (*pLists[level])[indices[level]];
 			else
 				outmasks[level] = outmasks[level-1] | (*pLists[level])[indices[level]];
-			if(level<(n_to_combine-1))
+			if (level<(n_to_combine-1))
 			{
 				indices[level+1]=0;
 				indices[level]++;
@@ -311,14 +313,14 @@ SortWord_t ClusterGroup::outputSize() const
 {
 	SortWord_t prod=1;
 	
-	for(u32 k=0;k<ninputs;k++)
+	for (u32 k=0;k<ninputs;k++)
 	{
-		if(masks[k]!=0)
+		if (masks[k]!=0)
 			prod *= patternlists[k].size();
 	}
 	
 #if 1
-	if(prod==0) // Special case for N=NMAX, dirty hack avoiding wrap-around to 0 of empty network: set size to one less.
+	if (prod==0) // Special case for N=NMAX, dirty hack avoiding wrap-around to 0 of empty network: set size to one less.
 		prod-=1;
 #endif
 	
@@ -331,18 +333,18 @@ void computePrefixOutputs(u8 ninputs, const Network_t &prefix, SinglePatternList
 	ClusterGroup cg(ninputs);
 	Network_t todo = prefix;
 	
-	while(todo.size() > 0)
+	while (!todo.empty())
 	{
 		cg.preSort(todo[0]); // Process first remaining pair, combine related clusters
 		
 		Network_t postponed;
 		SortWord_t visitmask=0;
-		for(size_t k=1;k<todo.size();k++) // Skip 1st element, we just handled it
+		for (size_t k=1;k<todo.size();k++) // Skip 1st element, we just handled it
 		{
 			Pair_t el=todo[k];
 			SortWord_t elmask = (1ull<<el.lo)|(1ull<<el.hi);
 			
-			if(((visitmask & elmask)==0) && cg.isSameCluster(el))
+			if (((visitmask & elmask)==0) && cg.isSameCluster(el))
 			{
 				// Prioritize elements that can be applied without extra cluster joining.
 				// The goal is to reduce memory requirements where possible
@@ -370,7 +372,7 @@ static bool hasSmallerMirror(u8 ninputs, SortWord_t w)
 {
 	SortWord_t rw=0u;
 	SortWord_t tmp=w;
-	for(u32 k=0;k<ninputs;k++)
+	for (u32 k=0;k<ninputs;k++)
 	{
 		rw <<= 1;
 		rw |= ~tmp & 1u;
@@ -382,7 +384,7 @@ static bool hasSmallerMirror(u8 ninputs, SortWord_t w)
 
 static SortWord_t all_n_inputs_mask; ///< ninputs lowest bit to be set
 
-static bool isSorted(u8 ninputs, SortWord_t w)
+static bool isSorted(SortWord_t w)
 {
 	w = ~w & all_n_inputs_mask;
 	return (w&(w+1)) == 0;
@@ -396,25 +398,25 @@ void convertToBitParallel(u8 ninputs, const SinglePatternList_t &singles, bool u
 	parallels.clear();
 	
 	all_n_inputs_mask = 0ULL;
-	for(u32 k=0;k<ninputs;k++)
+	for (u32 k=0;k<ninputs;k++)
 	{
 		all_n_inputs_mask |= 1ULL << k;
 	}
 	
-	for(size_t idx=0;idx<singles.size();idx++)
+	for (size_t idx=0;idx<singles.size();idx++)
 	{
 		SortWord_t w=singles[idx];
-		if(use_symmetry && hasSmallerMirror(ninputs, w))
+		if (use_symmetry && hasSmallerMirror(ninputs, w))
 		{
 			continue; // Complement of reverse word is smaller, skip this vector if the network is symmetric
 		}
 		
-		if(isSorted(ninputs, w))
+		if (isSorted(w))
 		{
 			continue; // Already sorted pattern will not be affected by sorting operation - useless as test vector
 		}
 		
-		for(u32 b=0;b<ninputs;b++)
+		for (u32 b=0;b<ninputs;b++)
 		{
 			buffer[b]<<=1;
 			buffer[b]|=(w&1);
@@ -422,9 +424,9 @@ void convertToBitParallel(u8 ninputs, const SinglePatternList_t &singles, bool u
 		}
 		level++;
 		
-		if(level>=PARWORDSIZE)
+		if (level>=PARWORDSIZE)
 		{
-			for(u32 b=0;b<ninputs;b++)
+			for (u32 b=0;b<ninputs;b++)
 			{
 				parallels.push_back(buffer[b]);
 				buffer[b]=0; // Needed ? Probably not, but cleaner.
@@ -432,17 +434,17 @@ void convertToBitParallel(u8 ninputs, const SinglePatternList_t &singles, bool u
 			level=0;			
 		}	
 	}
-	if(level>0)
+	if (level>0)
 	{
-		for(u32 b=0;b<ninputs;b++)
+		for (u32 b=0;b<ninputs;b++)
 		{
 			parallels.push_back(buffer[b]);
 		}
 	}
 
-	if(Verbosity > 2)
+	if (Verbosity > 2)
 	{
-		printf("Debug: Pattern conversion: %lu single inputs -> %lu parallel words (%u * %lu) (symmetry:%d)\n", singles.size(), parallels.size(), ninputs, parallels.size()/ninputs, use_symmetry);
+		PRINT("Debug: Pattern conversion: {} single inputs -> {} parallel words ({} * {}) (symmetry:{})\n", singles.size(), parallels.size(), ninputs, parallels.size()/ninputs, use_symmetry);
 	}
 }
 
@@ -456,13 +458,13 @@ static Network_t alphabet; ///< "Alphabet" of possible CEs defined by their vert
 static void initAlphabet(u8 ninputs, bool use_symmetry)
 {
 	alphabet.clear();
-	for(u32 i=0;i<(ninputs-1u);i++)
-		for(u32 j=i+1;j<ninputs;j++)
+	for (u32 i=0;i<(ninputs-1u);i++)
+		for (u32 j=i+1;j<ninputs;j++)
 		{
 			u8 isym=ninputs-1-j;
 			u8 jsym=ninputs-1-i;
 			
-			if(!use_symmetry || (isym>i) || ((isym==i) && (jsym>=j)))
+			if (!use_symmetry || (isym>i) || ((isym==i) && (jsym>=j)))
 			{
 				Pair_t p={(u8)i,(u8)j};
 				alphabet.push_back(p);
@@ -472,18 +474,17 @@ static void initAlphabet(u8 ninputs, bool use_symmetry)
 
 SortWord_t createGreedyPrefix(u8 ninputs, u32 maxpairs, bool use_symmetry, Network_t &prefix, RandGen_t &rndgen)
 {
-	if(Verbosity>2)
-	{
-		printf("Creating greedy prefix. Initial prefix size = %lu, max prefix size %u.\n",prefix.size(),maxpairs);
-	}
+	if (Verbosity>2)
+		PRINT("Creating greedy prefix. Initial prefix size = {}, max prefix size {}.\n",prefix.size(),maxpairs);
+
 	ClusterGroup cg(ninputs);
 	initAlphabet(ninputs, use_symmetry);
 
-	for(size_t k=0;k<prefix.size();k++)
+	for (size_t k=0;k<prefix.size();k++)
 		cg.preSort(prefix[k]);
 	SortWord_t currentsize = cg.outputSize();
 	
-	while((prefix.size() < maxpairs) || (use_symmetry && (prefix.size()<(maxpairs-1))))
+	while ((prefix.size() < maxpairs) || (use_symmetry && (prefix.size()<(maxpairs-1))))
 	{
 		Network_t ashuf = alphabet;
 		Pair_t best= {0,1};
@@ -492,18 +493,18 @@ SortWord_t createGreedyPrefix(u8 ninputs, u32 maxpairs, bool use_symmetry, Netwo
 
 		ClusterGroup cgbest=cg;
 		SortWord_t minfuturesize = currentsize;
-		for(size_t k=0;k<alphabet.size();k++)
+		for (size_t k=0;k<alphabet.size();k++)
 		{
 			ClusterGroup cgnew = cg;
 			cgnew.preSort(ashuf[k]);
-			if(use_symmetry && ((ashuf[k].lo+ashuf[k].hi) != (ninputs-1)))
+			if (use_symmetry && ((ashuf[k].lo+ashuf[k].hi) != (ninputs-1)))
 			{
 				Pair_t p = { (u8)(ninputs-1-ashuf[k].hi), (u8)(ninputs-1-ashuf[k].lo) };
 				cgnew.preSort(p);
 			}
 			SortWord_t newsize = cgnew.outputSize();
 			SortWord_t futuresize = newsize;
-			if(futuresize<minfuturesize)
+			if (futuresize<minfuturesize)
 			{
 				minsize=newsize;
 				minfuturesize=futuresize;
@@ -512,27 +513,27 @@ SortWord_t createGreedyPrefix(u8 ninputs, u32 maxpairs, bool use_symmetry, Netwo
 			}
 		}
 		
-		if(minsize>=currentsize)
+		if (minsize>=currentsize)
 		{
 			// Found no improvement
-			if(Verbosity>2)
+			if (Verbosity>2)
 			{
-				printf("Greedy algorithm: no further improvement.\n");
+				PRINT("Greedy algorithm: no further improvement.\n");
 			}
 			break;
 		}
 		cg=cgbest;
-		if(Verbosity>2)
+		if (Verbosity>2)
 		{
-			printf("Greedy: adding pair (%u,%u)\n",best.lo,best.hi);
+			PRINT("Greedy: adding pair ({},{})\n",best.lo,best.hi);
 		}
 		prefix.push_back(best);
-		if(use_symmetry && ((best.lo+best.hi) != (ninputs-1)))
+		if (use_symmetry && ((best.lo+best.hi) != (ninputs-1)))
 		{
 			Pair_t p = { (u8)(ninputs-1-best.hi), (u8)(ninputs-1-best.lo) };
-			if(Verbosity>2)
+			if (Verbosity>2)
 			{
-				printf("Greedy: adding symmetric pair (%u,%u)\n",p.lo,p.hi);
+				PRINT("Greedy: adding symmetric pair ({},{})\n",p.lo,p.hi);
 			}
 			prefix.push_back(p);
 		}		

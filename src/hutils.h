@@ -83,7 +83,7 @@ class OCH_t {
 public:
 	OCH_t();
 	void clear();
-	bool improved(u32 size, u32 depth);
+	bool improved(u32 l, u32 d);
 	void print() const;
 private: 
 	struct OCH_Entry{

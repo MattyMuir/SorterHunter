@@ -27,11 +27,14 @@
  */
 
 #include "ConfigParser.h"
+
 #include <map>
 #include <cstdio>
 #include <iostream>
 #include <fstream>
 #include <cctype>
+
+#include "print.h"
 
 using std::string;
 
@@ -61,15 +64,15 @@ class ConfigParser::Data{
 static string stripline(string l)
 {
 	size_t pos=l.find('#');
-	if(pos!=string::npos)
+	if (pos!=string::npos)
 		l=l.substr(0,pos);
 	pos=l.find_last_not_of(" \t\n\r");
-	if(pos!=string::npos)
+	if (pos!=string::npos)
 		l=l.substr(0,pos+1);
 	else
 		l="";
 	pos=l.find_first_not_of(" \t\n\r");
-	if(pos!=string::npos)
+	if (pos!=string::npos)
 		l=l.substr(pos);
 	else
 		l="";
@@ -87,7 +90,7 @@ static bool value2u64(string s, uint64_t &result)
 	char dummy;
 	int rv;
 	unsigned long long x=0;
-	rv= sscanf(s.c_str(),"%llu%c",&x,&dummy);
+	rv= sscanf_s(s.c_str(),"%llu%c",&x,&dummy);
 	result=x;
 	return rv==1;
 }
@@ -112,30 +115,28 @@ void ConfigParser::Data::clear()
 
 bool ConfigParser::Data::addKeyValue(string key, string value, u32 linenr)
 {
-	if((key=="FixedPrefix") || (key=="InitialNetwork") || (key=="Postfix"))
+	if ((key=="FixedPrefix") || (key=="InitialNetwork") || (key=="Postfix"))
 	{
 		/* For these two keys, delegate further processing to network value handler */
 		return addKeyNetworkValue(key,value,linenr);
 	}
 	
-	if(intmap.find(key)!=intmap.end())
+	if (intmap.contains(key))
 	{
-		printf("Duplicate key '%s' in config file, line %u\n",key.c_str(),linenr);
+		PRINT("Duplicate key '{}' in config file, line {}\n", key, linenr);
 		return false;
 	}
 	
 	uint64_t numval;
 	bool ok=value2u64(value,numval);
-	if(!ok)
+	if (!ok)
 	{
-		printf("Numeric rvalue expected in config file, line %u\n",linenr);
+		PRINT("Numeric rvalue expected in config file, line {}\n",linenr);
 		return false;
 	}
-	else
-	{
-		intmap.insert(std::pair<string,uint64_t>(key,numval));
-		return true;
-	}
+
+	intmap.insert(std::pair<string,uint64_t>(key,numval));
+	return true;
 }
 
 /**
@@ -147,9 +148,9 @@ bool ConfigParser::Data::addKeyValue(string key, string value, u32 linenr)
  */
 bool ConfigParser::Data::addKeyNetworkValue(string key, string value, u32 linenr)
 {
-	if(networkmap.find(key)!=networkmap.end())
+	if (networkmap.contains(key))
 	{
-		printf("Duplicate key '%s' in config file, line %u\n",key.c_str(),linenr);
+		PRINT("Duplicate key '{}' in config file, line {}\n", key, linenr);
 		return false;
 	}
 	
@@ -157,24 +158,24 @@ bool ConfigParser::Data::addKeyNetworkValue(string key, string value, u32 linenr
 	u32 state=0; // 0: scan for '(' / 1: scan for inner ',' / 2: scan for ')' / 3: scan for outer ',' / 100: error
 	size_t tokenstart;
 	uint64_t p1,p2;
-	for(size_t idx=0;idx<value.size();idx++)
+	for (size_t idx=0;idx<value.size();idx++)
 	{
 		char c=value[idx];
 		switch(state)
 		{
 			case 0:
-				if(c=='(')
+				if (c=='(')
 				{
 					tokenstart=idx+1;
 					state=1;
 				}
-				else if(!isspace(c))
+				else if (!isspace(c))
 				{
 					state=100;
 				}
 				break;
 			case 1:
-				if(c==',')
+				if (c==',')
 				{
 					bool ok=value2u64(stripline(value.substr(tokenstart,idx-tokenstart)),p1);
 					state=ok ? 2: 100;
@@ -182,11 +183,11 @@ bool ConfigParser::Data::addKeyNetworkValue(string key, string value, u32 linenr
 				}
 				break;
 			case 2:
-				if(c==')')
+				if (c==')')
 				{
 					bool ok=value2u64(stripline(value.substr(tokenstart,idx-tokenstart)),p2);
 					state=ok ? 3: 100;
-					if(ok && (p1<=255) && (p2<=255))
+					if (ok && (p1<=255) && (p2<=255))
 					{
 						Pair_t p={(u8)p1,(u8)p2};
 						network.push_back(p);
@@ -194,11 +195,11 @@ bool ConfigParser::Data::addKeyNetworkValue(string key, string value, u32 linenr
 				}
 				break;
 			case 3:
-				if(c==',')
+				if (c==',')
 				{
 					state=0;
 				}
-				else if(!isspace(c))
+				else if (!isspace(c))
 				{
 					state=100;
 				}
@@ -208,16 +209,14 @@ bool ConfigParser::Data::addKeyNetworkValue(string key, string value, u32 linenr
 		}
 	}
 	
-	if((state!=0) && (state!=3))
+	if ((state!=0) && (state!=3))
 	{
-		printf("Config file parse error line %u\n",linenr);
+		PRINT("Config file parse error line {}\n",linenr);
 		return false;
 	}
-	else
-	{
-		networkmap.insert(std::pair<string,Network_t>(key,network));
-		return true;
-	}
+
+	networkmap.insert(std::pair<string,Network_t>(key,network));
+	return true;
 }
 
 /**
@@ -230,15 +229,15 @@ bool ConfigParser::Data::addKeyNetworkValue(string key, string value, u32 linenr
 bool ConfigParser::Data::verifyNumKey(string key, uint64_t minval, uint64_t maxval) const
 {
 	IntMap::const_iterator it=intmap.find(key);
-	if(it==intmap.end())
+	if (it==intmap.end())
 	{
-		printf("Missing mandatory key '%s' in config file.\n",key.c_str());
+		PRINT("Missing mandatory key '{}' in config file.\n", key);
 		return false;
 	}
 	uint64_t val= it->second;
-	if((val<minval)||(val>maxval))
+	if ((val<minval)||(val>maxval))
 	{
-		printf("Value for key '%s' should be in range %llu..%llu (was %llu)\n",key.c_str(),(unsigned long long)minval, (unsigned long long)maxval, (unsigned long long)val);
+		PRINT("Value for key '{}' should be in range {}..{} (was {})\n", key, (unsigned long long)minval, (unsigned long long)maxval, (unsigned long long)val);
 		return false;
 	}
 	return true;
@@ -248,7 +247,7 @@ bool ConfigParser::parseConfig(const char *filename)
 {
 	data->clear();
 	std::ifstream infile(filename);
-	if(!infile)
+	if (!infile)
 	{
 		perror("Could not open config file");
 		return false;
@@ -258,16 +257,16 @@ bool ConfigParser::parseConfig(const char *filename)
 	string line;
 	u32 linenr=1;
  
-    while(getline(infile, line)) {
+    while (getline(infile, line)) {
         /* Strip */
         line=stripline(line);
         
-        if(line.size()>0)
+        if (!line.empty())
         {
 			size_t klen=line.find('=');
-			if((klen==string::npos) || (klen<1u))
+			if ((klen==string::npos) || (klen<1u))
 			{
-				printf("Parse error at %s:%u\n",filename,linenr);
+				PRINT("Parse error at {}:{}\n",filename,linenr);
 				fileok=false;
 			}
 			else
@@ -275,7 +274,7 @@ bool ConfigParser::parseConfig(const char *filename)
 				string key=stripline(line.substr(0,klen));
 				string value=stripline(line.substr(klen+1));
 				bool ok=data->addKeyValue(key,value,linenr);
-				if(!ok)
+				if (!ok)
 					fileok=false;	
 			}
 		}
@@ -294,14 +293,12 @@ bool ConfigParser::parseConfig(const char *filename)
 uint64_t ConfigParser::getInt(string key, uint64_t defaultval) const
 {
 	IntMap::const_iterator it=data->intmap.find(key);
-	if(it==data->intmap.end())
+	if (it==data->intmap.end())
 	{
 		return defaultval;
 	}
-	else
-	{
-		return it->second;
-	}
+
+	return it->second;
 }
 
 
@@ -309,14 +306,12 @@ const Network_t &ConfigParser::getNetwork(string key) const
 {
 	static Network_t empty_net;
 	NetworkMap::const_iterator it=data->networkmap.find(key);
-	if(it==data->networkmap.end())
+	if (it==data->networkmap.end())
 	{
 		return empty_net;
 	}
-	else
-	{
-		return it->second;
-	}
+
+	return it->second;
 }
 
 

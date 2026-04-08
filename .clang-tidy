@@ -17,13 +17,14 @@ readability-*,
 -readability-static-accessed-through-instance,
 -readability-redundant-access-specifiers,
 -performance-unnecessary-value-param,
--readability-avoid-return-with-void-value
--readability-avoid-unconditional-preprocessor-if
+-readability-avoid-return-with-void-value,
+-readability-avoid-unconditional-preprocessor-if,
+-readability-inconsistent-ifelse-braces
 '
 
 CheckOptions:
  - key:    readability-function-cognitive-complexity.Threshold
-   value:  35
+   value:  120
 
 WarningsAsErrors: ''
 HeaderFilterRegex: '\".*\"'
