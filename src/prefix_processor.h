@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file prefix_processor.h
  * @brief Network prefix related operations for SorterHunter program
@@ -26,9 +27,6 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef _PREFIX_PROCESSOR_H_
-#define _PREFIX_PROCESSOR_H_
-
 #include "htypes.h"
 
 /**
@@ -39,7 +37,7 @@
  * @param prefix Prefix to process
  * @param patterns [OUT] List of output patterns
  */
-void computePrefixOutputs(u8 ninputs, const Network_t &prefix, SinglePatternList_t &patterns);
+void computePrefixOutputs(uint8_t ninputs, const Network &prefix, SinglePatternList &patterns);
 
 /**
  * Converts a set of prefix output patterns to a bit parallel data structure to speed up testing of the "postfix" network.
@@ -49,7 +47,7 @@ void computePrefixOutputs(u8 ninputs, const Network_t &prefix, SinglePatternList
  * @param use_symmetry Optimize using symmetry
  * @param parallels [OUT] Bit parallel representations of the patterns
  */
-void convertToBitParallel(u8 ninputs, const SinglePatternList_t &singles, bool use_symmetry, BitParallelList_t &parallels);
+void convertToBitParallel(uint8_t ninputs, const SinglePatternList &singles, bool use_symmetry, BitParallelList &parallels);
 
 /**
  * Tries to create a partially ordered network that (approximately) minimizes the number of possible outputs.
@@ -62,6 +60,4 @@ void convertToBitParallel(u8 ninputs, const SinglePatternList_t &singles, bool u
  * @param rndgen Random number generator for shuffling
  * @return Number of outputs from partially ordered network (ninputs+1 if fully sorted, 2**ninputs worst case)
  */
-SortWord_t createGreedyPrefix(u8 ninputs, u32 maxpairs, bool use_symmetry, Network_t &prefix, RandGen_t &rndgen);
-
-#endif // _PREFIX_PROCESSOR_H_
+SortWord createGreedyPrefix(uint8_t ninputs, uint32_t maxpairs, bool use_symmetry, Network &prefix, RandGen_t &rndgen);

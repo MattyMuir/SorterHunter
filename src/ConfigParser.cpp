@@ -39,7 +39,7 @@
 using std::string;
 
 typedef std::map<string,uint64_t> IntMap; ///< key/value pairs for integer parameters
-typedef std::map<string,Network_t> NetworkMap; ///< key/value pairs for network parameters
+typedef std::map<string,Network> NetworkMap; ///< key/value pairs for network parameters
 
 /**
  * Config parser internal kitchen class
@@ -47,13 +47,13 @@ typedef std::map<string,Network_t> NetworkMap; ///< key/value pairs for network 
 class ConfigParser::Data{
 	public:
 		void clear();
-		bool addKeyValue(string key, string value, u32 linenr);
+		bool addKeyValue(string key, string value, uint32_t linenr);
 		bool verifyNumKey(string key,uint64_t minval,uint64_t maxval) const;
 		/* Data members (public) */
 		IntMap intmap; ///< key/value pairs for integer parameters
 		NetworkMap networkmap; ///< key/value pairs for network parameters
 	private:
-		bool addKeyNetworkValue(string key, string value, u32 linenr); 
+		bool addKeyNetworkValue(string key, string value, uint32_t linenr); 
 };
 
 /**
@@ -113,7 +113,7 @@ void ConfigParser::Data::clear()
  * @return true on success
  */
 
-bool ConfigParser::Data::addKeyValue(string key, string value, u32 linenr)
+bool ConfigParser::Data::addKeyValue(string key, string value, uint32_t linenr)
 {
 	if ((key=="FixedPrefix") || (key=="InitialNetwork") || (key=="Postfix"))
 	{
@@ -146,7 +146,7 @@ bool ConfigParser::Data::addKeyValue(string key, string value, u32 linenr)
  * @param linenr Line number in config file
  * @return true on success
  */
-bool ConfigParser::Data::addKeyNetworkValue(string key, string value, u32 linenr)
+bool ConfigParser::Data::addKeyNetworkValue(string key, string value, uint32_t linenr)
 {
 	if (networkmap.contains(key))
 	{
@@ -154,8 +154,8 @@ bool ConfigParser::Data::addKeyNetworkValue(string key, string value, u32 linenr
 		return false;
 	}
 	
-	Network_t network;
-	u32 state=0; // 0: scan for '(' / 1: scan for inner ',' / 2: scan for ')' / 3: scan for outer ',' / 100: error
+	Network network;
+	uint32_t state=0; // 0: scan for '(' / 1: scan for inner ',' / 2: scan for ')' / 3: scan for outer ',' / 100: error
 	size_t tokenstart;
 	uint64_t p1,p2;
 	for (size_t idx=0;idx<value.size();idx++)
@@ -189,7 +189,7 @@ bool ConfigParser::Data::addKeyNetworkValue(string key, string value, u32 linenr
 					state=ok ? 3: 100;
 					if (ok && (p1<=255) && (p2<=255))
 					{
-						Pair_t p={(u8)p1,(u8)p2};
+						CE p={(uint8_t)p1,(uint8_t)p2};
 						network.push_back(p);
 					}
 				}
@@ -215,7 +215,7 @@ bool ConfigParser::Data::addKeyNetworkValue(string key, string value, u32 linenr
 		return false;
 	}
 
-	networkmap.insert(std::pair<string,Network_t>(key,network));
+	networkmap.insert(std::pair<string,Network>(key,network));
 	return true;
 }
 
@@ -255,7 +255,7 @@ bool ConfigParser::parseConfig(const char *filename)
 	
 	bool fileok=true;
 	string line;
-	u32 linenr=1;
+	uint32_t linenr=1;
  
     while (getline(infile, line)) {
         /* Strip */
@@ -302,9 +302,9 @@ uint64_t ConfigParser::getInt(string key, uint64_t defaultval) const
 }
 
 
-const Network_t &ConfigParser::getNetwork(string key) const
+const Network &ConfigParser::getNetwork(string key) const
 {
-	static Network_t empty_net;
+	static Network empty_net;
 	NetworkMap::const_iterator it=data->networkmap.find(key);
 	if (it==data->networkmap.end())
 	{

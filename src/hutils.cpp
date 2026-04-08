@@ -31,85 +31,15 @@
 
 #include "print.h"
 
-/**
- * Create orthogonal convex hull
- */
-OCH_t::OCH_t()
-{	
-}
-
-/**
- * Clear OCH data
- */
-void OCH_t::clear()
+uint32_t computeDepth(const Network &nw)
 {
-	och.clear();
-}
-
-/**
- * Add a (size, depth) pair to the OCH computation
- * @param l length of network found
- * @param d depth of network found
- * @param true if the network is an "improvement" i.e. belongs to the updated set of OCH pairs that minimize both criteria.
- */
-bool OCH_t::improved(u32 l, u32 d)
-{
-	bool matched=false;
-	
-	for (size_t k=0;k<och.size();k++)
-	{
-		if ((l>=och[k].size)&&(d>=och[k].depth))
-			matched=true;
-	}
-	
-	if (matched)
-		return false;
-	
-	std::vector<OCH_Entry> newch;
-	OCH_Entry ce;
-	ce.size=l;
-	ce.depth=d;
-	newch.push_back(ce);
-
-	for (size_t k=0;k<och.size();k++)
-	{
-		if ((och[k].size<l)||(och[k].depth<d))
-		{
-			newch.push_back(och[k]);
-		}
-	}
-	
-	och=newch;
-	return true;
-}
-	
-
-/**
- * Print best performing (length, depth) pairs found so far
- */
-void OCH_t::print() const
-{
-	PRINT("Most performant: [");
-	for (size_t k=0;k<och.size();k++)
-	{
-		PRINT("({},{})",och[k].size,och[k].depth);
-		PRINT("{}", (k<(och.size()-1)) ? ',':']');		
-	}
-	PRINT("\r\n");
-	
-}
-
-
-
-u32 computeDepth(const Network_t &nw)
-{
-	std::vector<SortWord_t> layers;
+	std::vector<SortWord> layers;
 	int nlayers=0;
 	
 	for (size_t k=0;k<nw.size();k++)
 	{
-		u32 i=nw[k].lo;
-		u32 j=nw[k].hi;
+		uint32_t i=nw[k].lo;
+		uint32_t j=nw[k].hi;
 		int matchidx=nlayers;
 		int idx=nlayers-1;
 		while (idx>=0)
@@ -136,8 +66,7 @@ u32 computeDepth(const Network_t &nw)
 	return nlayers;
 }
 
-
-void printnw(const Network_t &nw)
+void printnw(const Network &nw)
 {
 	PRINT("[");
 	for (size_t k=0;k<nw.size();k++)
@@ -148,7 +77,7 @@ void printnw(const Network_t &nw)
 	PRINT("}}\r\n");
 }
 
-void symmetricExpansion(u8 ninputs, const Network_t &inpairs, Network_t &outpairs)
+void symmetricExpansion(uint8_t ninputs, const Network &inpairs, Network &outpairs)
 {
 	outpairs.clear();
 	for (size_t k=0;k<inpairs.size();k++)
@@ -156,21 +85,19 @@ void symmetricExpansion(u8 ninputs, const Network_t &inpairs, Network_t &outpair
 		outpairs.push_back(inpairs[k]);
 		if ((inpairs[k].lo+inpairs[k].hi)!=(ninputs-1)) // Don't duplicate pair that maps on itself
 		{
-			Pair_t sp={(u8)(ninputs-1-inpairs[k].hi), (u8)(ninputs-1-inpairs[k].lo)};
+			CE sp={(uint8_t)(ninputs-1-inpairs[k].hi), (uint8_t)(ninputs-1-inpairs[k].lo)};
 			outpairs.push_back(sp);
 		}
 	}
 }
 
-
-void concatNetwork(const Network_t &nw1, const Network_t &nw2, Network_t &result)
+void concatNetwork(const Network &nw1, const Network &nw2, Network &result)
 {
 	result=nw1;
 	result.insert(result.end(),nw2.begin(),nw2.end());
 }
 
-
-void appendNetwork(Network_t &dst, const Network_t &src)
+void appendNetwork(Network &dst, const Network &src)
 {
 	if (!src.empty())
 	{

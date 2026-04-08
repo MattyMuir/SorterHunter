@@ -39,41 +39,42 @@
 #include <random>
 #include <ctime>
 
+#include "print.h"
 #include "htypes.h"
 #include "hutils.h"
 #include "ConfigParser.h"
 #include "prefix_processor.h"
-#include "print.h"
+#include "ConvexHull.h"
 
 ConfigParser cp;
 
-bool use_symmetry = true;					/// Treat sorting network as symmetric or not
-bool force_valid_uphill_step = true;		/// "Uphill" step inserts duplicate CE if not in final layer.
-u8 N = 0;									/// Problem dimension, i.e. number of inputs to be sorted
-u32 EscapeRate = 0;							/// Adds a random pair (and its symmetric complement for symmetric networks) every x iterations
-u32 MaxMutations = 1;						/// Maximum allowed number of mutations in evolution step
-u32 PrefixType = 0;							/// Type of prefix used (0=none, 1=fixed, 2=greedy)
-Network_t FixedPrefix;						/// Fixed prefix to use (if applicable)
-Network_t InitialNetwork;					/// Initial starting point of network
-u32 GreedyPrefixSize = 0;					/// Size of greedy prefix (if applicable)
-OCH_t conv_hull;							/// "Best performing" network list found so far
-uint64_t RandomSeed;						/// Random seed
-uint64_t RestartRate;						/// Return to initial conditions each ... iterations (0=never)
-u32 Verbosity = 1;							/// Overall verbosity level: 0:minimal, 1:moderate, 2:high, >2:debug        
+bool use_symmetry = true;							/// Treat sorting network as symmetric or not
+bool force_valid_uphill_step = true;				/// "Uphill" step inserts duplicate CE if not in final layer.
+uint8_t N = 0;										/// Problem dimension, i.e. number of inputs to be sorted
+uint32_t EscapeRate = 0;							/// Adds a random pair (and its symmetric complement for symmetric networks) every x iterations
+uint32_t MaxMutations = 1;							/// Maximum allowed number of mutations in evolution step
+uint32_t PrefixType = 0;							/// Type of prefix used (0=none, 1=fixed, 2=greedy)
+Network FixedPrefix;								/// Fixed prefix to use (if applicable)
+Network InitialNetwork;								/// Initial starting point of network
+uint32_t GreedyPrefixSize = 0;						/// Size of greedy prefix (if applicable)
+ConvexHull conv_hull;									/// "Best performing" network list found so far
+uint64_t RandomSeed;								/// Random seed
+uint64_t RestartRate;								/// Return to initial conditions each ... iterations (0=never)
+uint32_t Verbosity = 1;								/// Overall verbosity level: 0:minimal, 1:moderate, 2:high, >2:debug        
 
 // Working set of pairs in the sorting network
-Network_t pairs;							/// Current core network: evolving section between prefix and postfix. For symmetric networks, mirrored pair (if not coinciding) is omitted.
-Network_t se;								/// Symmetrical expansion of current network
-Network_t newpairs;
-Network_t prefix;							/// Fixed, greedy, hybrid or empty prefix network
-Network_t postfix;							/// Fixed or empty postfix network
+Network pairs;										/// Current core network: evolving section between prefix and postfix. For symmetric networks, mirrored pair (if not coinciding) is omitted.
+Network se;											/// Symmetrical expansion of current network
+Network newpairs;
+Network prefix;										/// Fixed, greedy, hybrid or empty prefix network
+Network postfix;									/// Fixed or empty postfix network
 
 // Set of all possible pairs, unique taking into account symmetric complements
-Network_t alphabet;
+Network alphabet;
 
-#define NMUTATIONTYPES 6					///< Number of different mutation types
-u32 mutation_type_weights[NMUTATIONTYPES];	///< Relative probabilities for each mutation type
-std::vector<u8> mutationSelector;			///< Helper variable to quickly pick a mutation with the requested probability.
+#define NMUTATIONTYPES 6							/// Number of different mutation types
+uint32_t mutation_type_weights[NMUTATIONTYPES];		/// Relative probabilities for each mutation type
+std::vector<uint8_t> mutationSelector;				/// Helper variable to quickly pick a mutation with the requested probability.
 
 // Random generation
 RandGen_t mtRand(std::random_device{}());
@@ -91,14 +92,14 @@ RandGen_t mtRand(std::random_device{}());
  * @param data Input/output vectors
  * @param nw Network to be tested
  */
-void applyBitParallelSort(BPWord_t data[], const Network_t& nw)
+void applyBitParallelSort(BPWord data[], const Network& nw)
 {
 	size_t l = nw.size();
 	for (size_t n = 0; n < l; n++)
 	{
-		u32 i = nw[n].lo;
-		u32 j = nw[n].hi;
-		BPWord_t iold = data[i];
+		uint32_t i = nw[n].lo;
+		uint32_t j = nw[n].hi;
+		BPWord iold = data[i];
 		data[i] &= data[j];
 		data[j] |= iold;
 	}
@@ -107,18 +108,18 @@ void applyBitParallelSort(BPWord_t data[], const Network_t& nw)
 /**
  * Test vectors filled with input data sets fed to parallel sorter tester
  */
-BitParallelList_t parallelpatterns_from_prefix;
+BitParallelList parallelpatterns_from_prefix;
 
 /**
  * Initialise test vectors with patterns produced by the prefix.
  * Test vectors are stored in parallelpatterns_from_prefix
  * @param prefix Network prefix to use
  */
-void prepareTestVectorsFromPrefix(const Network_t& prefix)
+void prepareTestVectorsFromPrefix(const Network& prefix)
 {
 	bool is_even = ((N % 2) == 0);
 
-	SinglePatternList_t singles;
+	SinglePatternList singles;
 	computePrefixOutputs(N, prefix, singles);
 
 	std::shuffle(singles.begin(), singles.end(), mtRand); // Shuffle test vectors: improve probability of early rejection of non-sorters
@@ -133,18 +134,20 @@ void prepareTestVectorsFromPrefix(const Network_t& prefix)
 void initalphabet()
 {
 	alphabet.clear();
-	for (u32 i = 0; i < (N - 1u); i++)
-		for (u32 j = i + 1; j < N; j++)
+	for (uint32_t i = 0; i < (N - 1u); i++)
+	{
+		for (uint32_t j = i + 1; j < N; j++)
 		{
-			u32 isym = N - 1 - j;
-			u32 jsym = N - 1 - i;
+			uint32_t isym = N - 1 - j;
+			uint32_t jsym = N - 1 - i;
 
 			if (!use_symmetry || (isym > i) || ((isym == i) && (jsym >= j)))
 			{
-				Pair_t p = { (u8)i,(u8)j };
+				CE p = { (uint8_t)i,(uint8_t)j };
 				alphabet.push_back(p);
 			}
 		}
+	}
 }
 
 /**
@@ -159,7 +162,7 @@ void initalphabet()
  * @param bpl List of test vectors matching the prefix (regrouped for parallel execution)
  * @param failvector Index of first failing vector
  */
-void bumpVectorPosition(BitParallelList_t& bpl, size_t failvector)
+void bumpVectorPosition(BitParallelList& bpl, size_t failvector)
 {
 	size_t groupno = failvector / PARWORDSIZE;
 	size_t idx = N * groupno;
@@ -170,7 +173,7 @@ void bumpVectorPosition(BitParallelList_t& bpl, size_t failvector)
 		// Move up failing vector group about 1/8 the distance to the front
 		for (size_t k = 0; k < N; k++)
 		{
-			BPWord_t z = bpl[idx + k - delta];
+			BPWord z = bpl[idx + k - delta];
 			bpl[idx + k - delta] = bpl[idx + k];
 			bpl[idx + k] = z;
 		}
@@ -178,13 +181,13 @@ void bumpVectorPosition(BitParallelList_t& bpl, size_t failvector)
 	else if (groupno == 1)
 	{
 		// Swap with last bit position of group 0
-		BPWord_t m0 = 1ull << (PARWORDSIZE - 1);
-		BPWord_t m1 = 1ull << (failvector % PARWORDSIZE);
+		BPWord m0 = 1ull << (PARWORDSIZE - 1);
+		BPWord m1 = 1ull << (failvector % PARWORDSIZE);
 		int shift = (PARWORDSIZE - 1) - (failvector % PARWORDSIZE);
 		for (size_t k = 0; k < N; k++)
 		{
-			BPWord_t old0 = bpl[k];
-			BPWord_t old1 = bpl[k + N];
+			BPWord old0 = bpl[k];
+			BPWord old1 = bpl[k + N];
 			bpl[k] = (old0 & ~m0) | ((old1 & m1) << shift);
 			bpl[k + N] = (old1 & ~m1) | ((old0 & m0) >> shift);
 		}
@@ -193,11 +196,11 @@ void bumpVectorPosition(BitParallelList_t& bpl, size_t failvector)
 	{
 		//assert(failvector<PARWORDSIZE);
 		// Swap with neighbouring bit position within group 0
-		BPWord_t m0 = 1ull << (failvector - 1);
-		BPWord_t m1 = 1ull << failvector;
+		BPWord m0 = 1ull << (failvector - 1);
+		BPWord m1 = 1ull << failvector;
 		for (size_t k = 0; k < N; k++)
 		{
-			BPWord_t old = bpl[k];
+			BPWord old = bpl[k];
 			bpl[k] = (old & ~m0 & ~m1) | ((old & m1) >> 1) | ((old & m0) << 1);
 		}
 	}
@@ -212,15 +215,15 @@ void bumpVectorPosition(BitParallelList_t& bpl, size_t failvector)
  * @param bpl List of test vectors matching the prefix
  * @return true if prefix+pairs form a valid sorter
  */
-bool testpairsFromPrefixOutput(const Network_t& pairs, BitParallelList_t& bpl)
+bool testpairsFromPrefixOutput(const Network& pairs, BitParallelList& bpl)
 {
 	size_t idx = 0;
 	size_t failvector = 0;
 
 	while (idx < bpl.size())
 	{
-		static BPWord_t data[NMAX];
-		BPWord_t accum = 0;
+		static BPWord data[NMAX];
+		BPWord accum = 0;
 
 		for (size_t k = 0; k < N; k++)
 			data[k] = bpl[idx + k];
@@ -255,15 +258,15 @@ bool testpairsFromPrefixOutput(const Network_t& pairs, BitParallelList_t& bpl)
  * @param failed_output_pattern First unsorted output pattern detected. Used to determine candidate elements to be appended.
  * @return true if prefix+pairs form a valid sorter
  */
-bool testInitialPairsFromPrefixOutput(const Network_t& pairs, const BitParallelList_t& bpl, SortWord_t& failed_output_pattern)
+bool testInitialPairsFromPrefixOutput(const Network& pairs, const BitParallelList& bpl, SortWord& failed_output_pattern)
 {
 	size_t idx = 0;
 	failed_output_pattern = 0;
 
 	while (idx < bpl.size())
 	{
-		static BPWord_t data[NMAX];
-		BPWord_t accum = 0;
+		static BPWord data[NMAX];
+		BPWord accum = 0;
 
 		for (size_t k = 0; k < N; k++)
 			data[k] = bpl[idx + k];
@@ -299,11 +302,11 @@ bool testInitialPairsFromPrefixOutput(const Network_t& pairs, const BitParallelL
  * @param ninputs Number of inputs
  * @return Filtered input network
  */
-static Network_t copyValidPairs(const Network_t& nw, u32 ninputs)
+static Network copyValidPairs(const Network& nw, uint32_t ninputs)
 {
-	static Network_t result;
+	static Network result;
 	result.clear();
-	for (Network_t::const_iterator it = nw.begin(); it != nw.end(); it++)
+	for (Network::const_iterator it = nw.begin(); it != nw.end(); it++)
 	{
 		if ((it->hi < ninputs) && (it->lo < it->hi))
 		{
@@ -318,10 +321,10 @@ static Network_t copyValidPairs(const Network_t& nw, u32 ninputs)
  * @param prefix [OUT] generated prefix
  * @param npairs Number of inputs to the network
  */
-void fillprefixGreedyA(Network_t& prefix, u32 npairs)
+void fillprefixGreedyA(Network& prefix, uint32_t npairs)
 {
 	prefix.clear();
-	SortWord_t sizetmp = createGreedyPrefix(N, npairs, use_symmetry, prefix, mtRand);
+	SortWord sizetmp = createGreedyPrefix(N, npairs, use_symmetry, prefix, mtRand);
 	if (Verbosity > 1)
 	{
 		PRINT("Greedy prefix size {}, span {}.\n", prefix.size(), (size_t)sizetmp);
@@ -333,10 +336,10 @@ void fillprefixGreedyA(Network_t& prefix, u32 npairs)
  * @param prefix [OUT] generated prefix
  * @param npairs Number of inputs to the network
  */
-void fillprefixFixedThenGreedyA(Network_t& prefix, u32 npairs)
+void fillprefixFixedThenGreedyA(Network& prefix, uint32_t npairs)
 {
 	prefix = copyValidPairs(FixedPrefix, N);
-	SortWord_t sizetmp = createGreedyPrefix(N, npairs + prefix.size(), use_symmetry, prefix, mtRand);
+	SortWord sizetmp = createGreedyPrefix(N, npairs + prefix.size(), use_symmetry, prefix, mtRand);
 	if (Verbosity > 2)
 	{
 		PRINT("Hybrid prefix size {}, span {}.\n", prefix.size(), (size_t)sizetmp);
@@ -349,17 +352,17 @@ void fillprefixFixedThenGreedyA(Network_t& prefix, u32 npairs)
  * @param newpairs [IN/OUT] candidate network
  * @return Positive integer identifying type of mutation applied, or 0 if none.
  */
-u32 attemptMutation(Network_t& newpairs)
+uint32_t attemptMutation(Network& newpairs)
 {
-	u32 applied = 0; // Nothing
-	u32 mtype = 1 + RANDELEM(mutationSelector);
+	uint32_t applied = 0; // Nothing
+	uint32_t mtype = 1 + RANDELEM(mutationSelector);
 
 	switch (mtype)
 	{
 	case 1:
 		if (!newpairs.empty())   // Removal of random pair from list
 		{
-			u32 a = RANDIDX(newpairs);
+			uint32_t a = RANDIDX(newpairs);
 			newpairs.erase(newpairs.begin() + a);
 			applied = mtype;
 		}
@@ -367,16 +370,16 @@ u32 attemptMutation(Network_t& newpairs)
 	case 2:
 		if (newpairs.size() > 1) // Swap two pairs at random positions in list
 		{
-			u32 a = RANDIDX(newpairs);
-			u32 b = RANDIDX(newpairs);
-			if (a > b) { u32 z = a; a = b; b = z; }
+			uint32_t a = RANDIDX(newpairs);
+			uint32_t b = RANDIDX(newpairs);
+			if (a > b) { uint32_t z = a; a = b; b = z; }
 			if (newpairs[a] != newpairs[b])
 			{
 				bool dependent = false;
-				u8 alo = newpairs[a].lo;
-				u8 ahi = newpairs[a].hi;
-				u8 blo = newpairs[b].lo;
-				u8 bhi = newpairs[b].hi;
+				uint8_t alo = newpairs[a].lo;
+				uint8_t ahi = newpairs[a].hi;
+				uint8_t blo = newpairs[b].lo;
+				uint8_t bhi = newpairs[b].hi;
 
 				// Pairs should either intersect, or another pair should exist between them that uses
 				// one of the same 4 inputs. Otherwise, comparisons can be executed in parallel and
@@ -385,10 +388,10 @@ u32 attemptMutation(Network_t& newpairs)
 					dependent = true;
 				else
 				{
-					for (u32 k = a + 1; k < b; k++)
+					for (uint32_t k = a + 1; k < b; k++)
 					{
-						u8 clo = newpairs[k].lo;
-						u8 chi = newpairs[k].hi;
+						uint8_t clo = newpairs[k].lo;
+						uint8_t chi = newpairs[k].hi;
 						if ((clo == alo) || (clo == ahi) || (chi == alo) || (chi == ahi) ||
 							(clo == blo) || (clo == bhi) || (chi == blo) || (chi == bhi))
 						{
@@ -399,7 +402,7 @@ u32 attemptMutation(Network_t& newpairs)
 				}
 				if (dependent)
 				{
-					Pair_t z = newpairs[a];
+					CE z = newpairs[a];
 					newpairs[a] = newpairs[b];
 					newpairs[b] = z;
 					applied = mtype;
@@ -410,8 +413,8 @@ u32 attemptMutation(Network_t& newpairs)
 	case 3:
 		if (!newpairs.empty())  // Replace a pair at a random position with another random pair
 		{
-			u32 a = RANDIDX(newpairs);
-			Pair_t p = RANDELEM(alphabet);
+			uint32_t a = RANDIDX(newpairs);
+			CE p = RANDELEM(alphabet);
 			if (newpairs[a] != p)
 			{
 				newpairs[a] = p;
@@ -422,18 +425,18 @@ u32 attemptMutation(Network_t& newpairs)
 	case 4:
 		if (newpairs.size() > 1) // Cross two pairs at random positions in list
 		{
-			u32 a = RANDIDX(newpairs);
-			u32 b = RANDIDX(newpairs);
-			u8 alo = newpairs[a].lo;
-			u8 ahi = newpairs[a].hi;
-			u8 blo = newpairs[b].lo;
-			u8 bhi = newpairs[b].hi;
+			uint32_t a = RANDIDX(newpairs);
+			uint32_t b = RANDIDX(newpairs);
+			uint8_t alo = newpairs[a].lo;
+			uint8_t ahi = newpairs[a].hi;
+			uint8_t blo = newpairs[b].lo;
+			uint8_t bhi = newpairs[b].hi;
 
 			if ((alo != blo) && (alo != bhi) && (ahi != blo) && (ahi != bhi))
 			{
-				u32 r2 = mtRand() % 2;
-				u32 x = r2 ? bhi : blo;
-				u32 y = r2 ? blo : bhi;
+				uint32_t r2 = mtRand() % 2;
+				uint32_t x = r2 ? bhi : blo;
+				uint32_t y = r2 ? blo : bhi;
 				newpairs[a].lo = min(alo, x);
 				newpairs[a].hi = max(alo, x);
 				newpairs[b].lo = min(ahi, y);
@@ -445,18 +448,18 @@ u32 attemptMutation(Network_t& newpairs)
 	case 5:
 		if (newpairs.size() > 1) // Swap neighbouring intersecting pairs - special case of type r=2.
 		{
-			u32 a = RANDIDX(newpairs);
-			u8 alo = newpairs[a].lo;
-			u8 ahi = newpairs[a].hi;
-			for (u32 b = a + 1; b < newpairs.size(); b++)
+			uint32_t a = RANDIDX(newpairs);
+			uint8_t alo = newpairs[a].lo;
+			uint8_t ahi = newpairs[a].hi;
+			for (uint32_t b = a + 1; b < newpairs.size(); b++)
 			{
-				u8 blo = newpairs[b].lo;
-				u8 bhi = newpairs[b].hi;
+				uint8_t blo = newpairs[b].lo;
+				uint8_t bhi = newpairs[b].hi;
 				if ((blo == alo) || (blo == ahi) || (bhi == alo) || (bhi == ahi))
 				{
 					if (newpairs[a] != newpairs[b])
 					{
-						Pair_t z = newpairs[a];
+						CE z = newpairs[a];
 						newpairs[a] = newpairs[b];
 						newpairs[b] = z;
 						applied = mtype;
@@ -469,9 +472,9 @@ u32 attemptMutation(Network_t& newpairs)
 	case 6:
 		if (!newpairs.empty()) // Change one half of a pair - special case of type r=3.
 		{
-			u32 a = RANDIDX(newpairs);
-			Pair_t p = newpairs[a];
-			Pair_t q;
+			uint32_t a = RANDIDX(newpairs);
+			CE p = newpairs[a];
+			CE q;
 			do
 			{
 				q = RANDELEM(alphabet);
@@ -495,17 +498,17 @@ u32 attemptMutation(Network_t& newpairs)
  * Report sorting network if it is an improved (size,depth) combination
  * @param nw Valid sorting network
  */
-static void checkImproved(const Network_t& nw)
+static void checkImproved(const Network& nw)
 {
-	u32 depth = computeDepth(nw);
-	if (conv_hull.improved(nw.size(), depth))
+	uint32_t depth = computeDepth(nw);
+	if (conv_hull.AddEntry(nw.size(), depth))
 	{
 		/* Print only if the sorter is an improved (size,depth) combination */
 		if ((Verbosity > 1) || (nw.size() <= ((N * (N - 1u)) / 2u))) // Reduce rubbish listing. Should at least compete with bubble sort before reporting
 		{
 			PRINT(" {{'N':{},'L':{},'D':{},'sw':'{}','ESC':{},'Prefix':{},'Postfix':{},'nw':", N, nw.size(), depth, VERSION, EscapeRate, prefix.size(), postfix.size());
 			printnw(nw);
-			conv_hull.print();
+			conv_hull.Print();
 		}
 	}
 }
@@ -566,9 +569,9 @@ int main(int argc, char* argv[])
 	mutation_type_weights[3] = cp.getInt("WeightCrossPairs", 1);
 	mutation_type_weights[4] = cp.getInt("WeightSwapIntersectingPairs", 1);
 	mutation_type_weights[5] = cp.getInt("WeightReplaceHalfPair", 1);
-	for (u32 n = 0; n < NMUTATIONTYPES; n++)
+	for (uint32_t n = 0; n < NMUTATIONTYPES; n++)
 	{
-		for (u32 k = 0; k < mutation_type_weights[n]; k++)
+		for (uint32_t k = 0; k < mutation_type_weights[n]; k++)
 			mutationSelector.push_back(n);
 	}
 	if (mutationSelector.empty())
@@ -635,12 +638,12 @@ int main(int argc, char* argv[])
 
 			appendNetwork(se, postfix);
 
-			SortWord_t failed_output_pattern;
+			SortWord failed_output_pattern;
 
 			if (testInitialPairsFromPrefixOutput(se, parallelpatterns_from_prefix, failed_output_pattern))
 				break;
 
-			Pair_t p;
+			CE p;
 
 			if (postfix.empty()) // Empty postfix: find a pattern that fixes an arbitrary inversion in the first failed output
 			{
@@ -668,7 +671,7 @@ int main(int argc, char* argv[])
 			pairs.push_back(p);
 		}
 
-		Network_t totalnw;
+		Network totalnw;
 		concatNetwork(prefix, se, totalnw);
 
 		if (Verbosity > 1)
@@ -698,7 +701,7 @@ int main(int argc, char* argv[])
 				}
 			}
 			/* Determine number of mutations to use in this iteration */
-			u32 nmods = 1;
+			uint32_t nmods = 1;
 
 			if (MaxMutations > 1)
 			{
@@ -709,10 +712,10 @@ int main(int argc, char* argv[])
 			newpairs = pairs;
 
 			/* Apply the mutations */
-			u32 modcount = 0;
+			uint32_t modcount = 0;
 			while (modcount < nmods)
 			{
-				u32 r = attemptMutation(newpairs);
+				uint32_t r = attemptMutation(newpairs);
 				if (r != 0)
 				{
 					modcount++;
@@ -746,11 +749,11 @@ int main(int argc, char* argv[])
 			if ((EscapeRate > 0) && ((mtRand() % EscapeRate) == 0))
 			{
 				int a = mtRand() % (pairs.size() + 1); // Random insertion position
-				Pair_t p = RANDELEM(alphabet);
+				CE p = RANDELEM(alphabet);
 
 				// Determine if the random pair p could be added in the last layer
 				bool hit_successor = false;
-				for (Network_t::const_iterator it = pairs.begin() + a; it != pairs.end(); it++)
+				for (Network::const_iterator it = pairs.begin() + a; it != pairs.end(); it++)
 				{
 					if ((it->lo == p.lo) || (it->hi == p.lo) || (it->lo == p.hi) || (it->hi == p.hi))
 					{

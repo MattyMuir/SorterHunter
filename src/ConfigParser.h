@@ -1,3 +1,4 @@
+#pragma once
 /**
  * @file ConfigParser.h 
  * @brief Config file reading service for SorterHunter
@@ -26,8 +27,6 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef _CONFIGPARSER_H_
-#define _CONFIGPARSER_H_
 #include "htypes.h"
 #include <string>
 
@@ -65,7 +64,7 @@ class ConfigParser
 		 * @param key Parameter name
 		 * @return Network composed of CEs
 		 */
-		const Network_t &getNetwork(std::string key) const;
+		const Network &getNetwork(std::string key) const;
 		
 		/**
 		 * Clean up
@@ -75,5 +74,3 @@ class ConfigParser
 		class Data;
 		Data *data;
 };
-
-#endif // _CONFIGPARSER_H_
