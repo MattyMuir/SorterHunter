@@ -40,13 +40,11 @@
 #include <ctime>
 
 #include "print.h"
-#include "htypes.h"
-#include "hutils.h"
+#include "types.h"
+#include "utils.h"
 #include "ConfigParser.h"
 #include "prefix_processor.h"
 #include "ConvexHull.h"
-
-ConfigParser cp;
 
 bool use_symmetry = true;							/// Treat sorting network as symmetric or not
 bool force_valid_uphill_step = true;				/// "Uphill" step inserts duplicate CE if not in final layer.
@@ -58,7 +56,6 @@ Network FixedPrefix;								/// Fixed prefix to use (if applicable)
 Network InitialNetwork;								/// Initial starting point of network
 uint32_t GreedyPrefixSize = 0;						/// Size of greedy prefix (if applicable)
 ConvexHull conv_hull;									/// "Best performing" network list found so far
-uint64_t RandomSeed;								/// Random seed
 uint64_t RestartRate;								/// Return to initial conditions each ... iterations (0=never)
 uint32_t Verbosity = 1;								/// Overall verbosity level: 0:minimal, 1:moderate, 2:high, >2:debug        
 
@@ -546,29 +543,30 @@ int main(int argc, char* argv[])
 	}
 
 	/* Process configuration file */
-	if (!cp.parseConfig(argv[1]))
+	ConfigParser cp;
+	try
 	{
-		PRINT("Error parsing config options.\n");
-		return -1;
+		cp.Parse(argv[1]);
+	}
+	catch (const ParseError& err)
+	{
+		PRINT("{}", err.what());
 	}
 
-	if (cp.getInt("RandomSeed") != 0u)
-	{
-		RandomSeed = cp.getInt("RandomSeed");
-		mtRand.seed(RandomSeed);
-	}
+	if (cp.HasKey("RandomSeed"))
+		mtRand.seed(cp.GetInt("RandomSeed"));
 
-	N = cp.getInt("Ninputs", 0);
-	use_symmetry = (cp.getInt("Symmetric") > 0u);
-	force_valid_uphill_step = (cp.getInt("ForceValidUphillStep", 1) > 0);
-	EscapeRate = cp.getInt("EscapeRate", 0);
-	MaxMutations = cp.getInt("MaxMutations", 1);
-	mutation_type_weights[0] = cp.getInt("WeigthRemovePair", 1);
-	mutation_type_weights[1] = cp.getInt("WeigthSwapPairs", 1);
-	mutation_type_weights[2] = cp.getInt("WeigthReplacePair", 1);
-	mutation_type_weights[3] = cp.getInt("WeightCrossPairs", 1);
-	mutation_type_weights[4] = cp.getInt("WeightSwapIntersectingPairs", 1);
-	mutation_type_weights[5] = cp.getInt("WeightReplaceHalfPair", 1);
+	N = cp.GetInt("Ninputs");
+	use_symmetry = cp.GetInt("Symmetric");
+	force_valid_uphill_step = (cp.GetInt("ForceValidUphillStep", 1) > 0);
+	EscapeRate = cp.GetInt("EscapeRate", 0);
+	MaxMutations = cp.GetInt("MaxMutations", 1);
+	mutation_type_weights[0] = cp.GetInt("WeigthRemovePair", 1);
+	mutation_type_weights[1] = cp.GetInt("WeigthSwapPairs", 1);
+	mutation_type_weights[2] = cp.GetInt("WeigthReplacePair", 1);
+	mutation_type_weights[3] = cp.GetInt("WeightCrossPairs", 1);
+	mutation_type_weights[4] = cp.GetInt("WeightSwapIntersectingPairs", 1);
+	mutation_type_weights[5] = cp.GetInt("WeightReplaceHalfPair", 1);
 	for (uint32_t n = 0; n < NMUTATIONTYPES; n++)
 	{
 		for (uint32_t k = 0; k < mutation_type_weights[n]; k++)
@@ -579,12 +577,13 @@ int main(int argc, char* argv[])
 		PRINT("No mutation types selected.\n");
 		exit(1);
 	}
-	PrefixType = cp.getInt("PrefixType", 0);
-	FixedPrefix = cp.getNetwork("FixedPrefix");
-	GreedyPrefixSize = cp.getInt("GreedyPrefixSize", 0);
-	RestartRate = cp.getInt("RestartRate", 0);
-	Verbosity = cp.getInt("Verbosity", 1);
-	postfix = cp.getNetwork("Postfix");
+	PrefixType = cp.GetInt("PrefixType", 0);
+	FixedPrefix = cp.GetNetwork("FixedPrefix");
+	GreedyPrefixSize = cp.GetInt("GreedyPrefixSize", 0);
+	RestartRate = cp.GetInt("RestartRate", 0);
+	Verbosity = cp.GetInt("Verbosity", 1);
+	if (cp.HasKey("Postfix"))
+		postfix = cp.GetNetwork("Postfix");
 
 	if ((N % 2) && use_symmetry)
 	{
@@ -624,7 +623,8 @@ int main(int argc, char* argv[])
 
 	for (;;) // Outer loop - restart from here if restart is triggered (only applies if RestartRate!=0)
 	{
-		pairs = copyValidPairs(cp.getNetwork("InitialNetwork"), N);
+		if (cp.HasKey("InitialNetwork"))
+			pairs = copyValidPairs(cp.GetNetwork("InitialNetwork"), N);
 
 		// Produce initial solution, simply by adding random pairs until we found a valid network. In case no postfix is present, we demand that the added pair
 		// fixes at least one of the output inversions in the first detected error output vector, so it does at least some useful work to help sorting the outputs.

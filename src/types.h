@@ -1,6 +1,6 @@
 #pragma once
 /**
- * @file htypes.h
+ * @file types.h
  * @brief Basic data types for SorterHunter program
  * @author Bert Dobbelaere bert.o.dobbelaere[at]telenet[dot]be
  *

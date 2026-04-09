@@ -1,326 +1,132 @@
-/**
- * @file ConfigParser.cpp
- * @brief Config file reading service for SorterHunter
- * @author Bert Dobbelaere bert.o.dobbelaere[at]telenet[dot]be
- *
- * Copyright (c) 2022 Bert Dobbelaere
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use,
- * copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following
- * conditions:
- * 
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
- * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- * OTHER DEALINGS IN THE SOFTWARE.
- */
-
 #include "ConfigParser.h"
 
-#include <map>
-#include <cstdio>
-#include <iostream>
+#include <cinttypes>
 #include <fstream>
-#include <cctype>
+#include <ranges>
+#include <format>
+#include <charconv>
 
-#include "print.h"
+enum class KeyType { Int, Network };
+static const std::unordered_map<std::string, KeyType> allKeys{
+	{ "Ninputs",						KeyType::Int },
+	{ "Symmetric",						KeyType::Int },
+	{ "RandomSeed",						KeyType::Int },
+	{ "EscapeRate",						KeyType::Int },
+	{ "ForceValidUphillStep",			KeyType::Int },
+	{ "MaxMutations",					KeyType::Int },
+	{ "WeigthRemovePair",				KeyType::Int },
+	{ "WeigthSwapPairs",				KeyType::Int },
+	{ "WeigthReplacePair",				KeyType::Int },
+	{ "WeightCrossPairs",				KeyType::Int },
+	{ "WeightSwapIntersectingPairs",	KeyType::Int },
+	{ "WeightReplaceHalfPair",			KeyType::Int },
+	{ "PrefixType",						KeyType::Int },
+	{ "GreedyPrefixSize",				KeyType::Int },
+	{ "RestartRate",					KeyType::Int },
+	{ "Verbosity",						KeyType::Int },
 
-using std::string;
-
-typedef std::map<string,uint64_t> IntMap; ///< key/value pairs for integer parameters
-typedef std::map<string,Network> NetworkMap; ///< key/value pairs for network parameters
-
-/**
- * Config parser internal kitchen class
- */
-class ConfigParser::Data{
-	public:
-		void clear();
-		bool addKeyValue(string key, string value, uint32_t linenr);
-		bool verifyNumKey(string key,uint64_t minval,uint64_t maxval) const;
-		/* Data members (public) */
-		IntMap intmap; ///< key/value pairs for integer parameters
-		NetworkMap networkmap; ///< key/value pairs for network parameters
-	private:
-		bool addKeyNetworkValue(string key, string value, uint32_t linenr); 
+	{ "FixedPrefix",					KeyType::Network },
+	{ "Postfix",						KeyType::Network },
+	{ "InitialNetwork",					KeyType::Network },
 };
 
-/**
- * Remove left and right whitespace + commented text.
- * @param l text to be stripped
- * @return stripped text
- */
-static string stripline(string l)
+ParseError::ParseError(const std::string& msg)
+	: std::runtime_error(msg) {}
+
+static void StripLine(std::string& line)
 {
-	size_t pos=l.find('#');
-	if (pos!=string::npos)
-		l=l.substr(0,pos);
-	pos=l.find_last_not_of(" \t\n\r");
-	if (pos!=string::npos)
-		l=l.substr(0,pos+1);
-	else
-		l="";
-	pos=l.find_first_not_of(" \t\n\r");
-	if (pos!=string::npos)
-		l=l.substr(pos);
-	else
-		l="";
-	return l;
+	// Remove comments
+	line = line.substr(0, line.find('#'));
+
+	// Remove whitespace
+	std::erase_if(line, [](char c) { return (bool)std::isspace(c); });
 }
 
-/**
- * Convert decimal string to integer
- * @param s Input string
- * @param result Converted integer
- * @return true on success
- */
-static bool value2u64(string s, uint64_t &result)
+static std::vector<std::string> Split(std::string_view str, char delim)
 {
-	char dummy;
-	int rv;
-	unsigned long long x=0;
-	rv= sscanf_s(s.c_str(),"%llu%c",&x,&dummy);
-	result=x;
-	return rv==1;
+	std::vector<std::string> parts;
+	for (const auto& part : std::views::split(str, delim))
+		parts.emplace_back(part.begin(), part.end());
+	return parts;
 }
 
-
-/**
- * Forget all parameters in database
- */
-void ConfigParser::Data::clear()
+void ConfigParser::Parse(const std::string& filepath)
 {
-	intmap.clear();
-	networkmap.clear();
+	// Open file
+	std::ifstream file{ filepath };
+	if (!file) throw ParseError{ "Could not open config file" };
+
+	std::string line;
+	while (std::getline(file, line))
+	{
+		// Strip comments and whitespace
+		StripLine(line);
+		if (line.empty()) continue;
+
+		// Split line by '=' character
+		auto parts = Split(line, '=');
+		if (parts.size() != 2)
+			throw ParseError{ std::format("Expected a single = per line, found {}", parts.size() - 1)};
+
+		AddKeyValue(parts[0], parts[1]);
+	}
 }
 
-/**
- * Process a (key,value) pair of strings from the config file
- * @param key LHS expression
- * @param value RHS expression
- * @param linenr Line number in config file
- * @return true on success
- */
-
-bool ConfigParser::Data::addKeyValue(string key, string value, uint32_t linenr)
+bool ConfigParser::HasKey(const std::string& key) const
 {
-	if ((key=="FixedPrefix") || (key=="InitialNetwork") || (key=="Postfix"))
-	{
-		/* For these two keys, delegate further processing to network value handler */
-		return addKeyNetworkValue(key,value,linenr);
-	}
-	
-	if (intmap.contains(key))
-	{
-		PRINT("Duplicate key '{}' in config file, line {}\n", key, linenr);
-		return false;
-	}
-	
-	uint64_t numval;
-	bool ok=value2u64(value,numval);
-	if (!ok)
-	{
-		PRINT("Numeric rvalue expected in config file, line {}\n",linenr);
-		return false;
-	}
-
-	intmap.insert(std::pair<string,uint64_t>(key,numval));
-	return true;
+	return keyMap.contains(key);
 }
 
-/**
- * Process a (key,value) pair of strings from the config file if a network value is expected
- * @param key LHS expression
- * @param value RHS expression (list of pairs)
- * @param linenr Line number in config file
- * @return true on success
- */
-bool ConfigParser::Data::addKeyNetworkValue(string key, string value, uint32_t linenr)
+uint64_t ConfigParser::GetInt(const std::string& key, std::optional<uint64_t> def) const
 {
-	if (networkmap.contains(key))
+	if (keyMap.contains(key)) return std::get<uint64_t>(keyMap.at(key));
+	if (def.has_value()) return def.value();
+	throw ParseError{ std::format("Config missing required key '{}'", key) };
+}
+
+const Network& ConfigParser::GetNetwork(const std::string& key) const
+{
+	if (keyMap.contains(key)) return std::get<Network>(keyMap.at(key));
+	throw ParseError{ std::format("Config has no key '{}'", key) };
+}
+
+void ConfigParser::AddKeyValue(const std::string& key, const std::string& valueStr)
+{
+	if (!allKeys.contains(key))
+		throw ParseError{ std::format("Invalid config key '{}'", key) };
+
+	if (keyMap.contains(key))
+		throw ParseError{ std::format("Duplicate config key '{}'", key) };
+
+	switch (allKeys.at(key))
 	{
-		PRINT("Duplicate key '{}' in config file, line {}\n", key, linenr);
-		return false;
+	case KeyType::Int:
+		keyMap[key] = ParseInt(valueStr);
+		break;
+	case KeyType::Network:
+		keyMap[key] = ParseNetwork(valueStr);
+		break;
 	}
-	
+}
+
+uint64_t ConfigParser::ParseInt(const std::string& valueStr)
+{
+	uint64_t value;
+	auto [ptr, errc] = std::from_chars(valueStr.data(), valueStr.data() + valueStr.size(), value);
+	if (errc != std::errc{})
+		throw ParseError{ std::format("Expected integer, got '{}'", valueStr) };
+	return value;
+}
+
+Network ConfigParser::ParseNetwork(const std::string& valueStr)
+{
 	Network network;
-	uint32_t state=0; // 0: scan for '(' / 1: scan for inner ',' / 2: scan for ')' / 3: scan for outer ',' / 100: error
-	size_t tokenstart;
-	uint64_t p1,p2;
-	for (size_t idx=0;idx<value.size();idx++)
+	uint8_t lo, hi;
+	const char* it = valueStr.c_str();
+	while (sscanf_s(it, "(%" SCNu8 ",%" SCNu8 ")", &lo, &hi) == 2)
 	{
-		char c=value[idx];
-		switch(state)
-		{
-			case 0:
-				if (c=='(')
-				{
-					tokenstart=idx+1;
-					state=1;
-				}
-				else if (!isspace(c))
-				{
-					state=100;
-				}
-				break;
-			case 1:
-				if (c==',')
-				{
-					bool ok=value2u64(stripline(value.substr(tokenstart,idx-tokenstart)),p1);
-					state=ok ? 2: 100;
-					tokenstart=idx+1;
-				}
-				break;
-			case 2:
-				if (c==')')
-				{
-					bool ok=value2u64(stripline(value.substr(tokenstart,idx-tokenstart)),p2);
-					state=ok ? 3: 100;
-					if (ok && (p1<=255) && (p2<=255))
-					{
-						CE p={(uint8_t)p1,(uint8_t)p2};
-						network.push_back(p);
-					}
-				}
-				break;
-			case 3:
-				if (c==',')
-				{
-					state=0;
-				}
-				else if (!isspace(c))
-				{
-					state=100;
-				}
-				break;
-			default:
-				break;
-		}
+		network.push_back({ lo, hi });
+		it = strchr(it, ')') + 2;
 	}
-	
-	if ((state!=0) && (state!=3))
-	{
-		PRINT("Config file parse error line {}\n",linenr);
-		return false;
-	}
-
-	networkmap.insert(std::pair<string,Network>(key,network));
-	return true;
-}
-
-/**
- * Verify presence and range of key with expected numeric value
- * @param key Parameter name
- * @param minval Minimum expected value (inclusive)
- * @param maxval Maximum expected value (inclusive)
- * @return true If present and within range
- */
-bool ConfigParser::Data::verifyNumKey(string key, uint64_t minval, uint64_t maxval) const
-{
-	IntMap::const_iterator it=intmap.find(key);
-	if (it==intmap.end())
-	{
-		PRINT("Missing mandatory key '{}' in config file.\n", key);
-		return false;
-	}
-	uint64_t val= it->second;
-	if ((val<minval)||(val>maxval))
-	{
-		PRINT("Value for key '{}' should be in range {}..{} (was {})\n", key, (unsigned long long)minval, (unsigned long long)maxval, (unsigned long long)val);
-		return false;
-	}
-	return true;
-}
-
-bool ConfigParser::parseConfig(const char *filename)
-{
-	data->clear();
-	std::ifstream infile(filename);
-	if (!infile)
-	{
-		perror("Could not open config file");
-		return false;
-	}
-	
-	bool fileok=true;
-	string line;
-	uint32_t linenr=1;
- 
-    while (getline(infile, line)) {
-        /* Strip */
-        line=stripline(line);
-        
-        if (!line.empty())
-        {
-			size_t klen=line.find('=');
-			if ((klen==string::npos) || (klen<1u))
-			{
-				PRINT("Parse error at {}:{}\n",filename,linenr);
-				fileok=false;
-			}
-			else
-			{
-				string key=stripline(line.substr(0,klen));
-				string value=stripline(line.substr(klen+1));
-				bool ok=data->addKeyValue(key,value,linenr);
-				if (!ok)
-					fileok=false;	
-			}
-		}
-        linenr++;
-    }
- 
-    infile.close();
-    
-    /* Limits of mandatory numeric keys*/
-    fileok = fileok && data->verifyNumKey("Ninputs",2,NMAX);
-    fileok = fileok && data->verifyNumKey("Symmetric",0,1);
-	
-	return fileok;
-}
-
-uint64_t ConfigParser::getInt(string key, uint64_t defaultval) const
-{
-	IntMap::const_iterator it=data->intmap.find(key);
-	if (it==data->intmap.end())
-	{
-		return defaultval;
-	}
-
-	return it->second;
-}
-
-
-const Network &ConfigParser::getNetwork(string key) const
-{
-	static Network empty_net;
-	NetworkMap::const_iterator it=data->networkmap.find(key);
-	if (it==data->networkmap.end())
-	{
-		return empty_net;
-	}
-
-	return it->second;
-}
-
-
-ConfigParser::ConfigParser()
-{
-	data=new Data; // Data default constructor starts with empty databases (ok)
-}
-
-ConfigParser::~ConfigParser()
-{
-	delete data;
+	return network;
 }

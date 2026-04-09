@@ -1,6 +1,6 @@
 #pragma once
 /**
- * @file hutils.h
+ * @file utils.h
  * @brief Various utility functions for SorterHunter program
  * @author Bert Dobbelaere bert.o.dobbelaere[at]telenet[dot]be
  *
@@ -27,7 +27,7 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "htypes.h"
+#include "types.h"
 #include <random>
 
 inline uint32_t min(uint32_t x,uint32_t y) { return (x<y)?x:y;} ///< Classic minimum
@@ -42,8 +42,6 @@ uint32_t computeDepth(const Network &nw);
 
 /**
  * Create "symmetric" sorting network by creating a mirror image of each pair if it doesn't coincide with the original.
- * Note: for networks with odd input sizes, the mirror image of a pair connected to the middle line will necessarilly belong
- * to a neighbouring layer.
  * @param ninputs Number of inputs
  * @param inpairs Input network
  * @param outpairs Symmetrical output network 

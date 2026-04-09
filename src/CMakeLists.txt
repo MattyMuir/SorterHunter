@@ -1,7 +1,7 @@
 ﻿# EXECUTABLE PROJECT - SorterHunter
 
 # === Create Executable ===
-add_executable(SorterHunter "main.cpp" "ConfigParser.h" "htypes.h" "hutils.h" "prefix_processor.h" "ConfigParser.cpp" "hutils.cpp" "prefix_processor.cpp" "print.h" "ConvexHull.h" "ConvexHull.cpp")
+add_executable(SorterHunter "main.cpp"  "types.h" "utils.h" "prefix_processor.h"  "utils.cpp" "prefix_processor.cpp" "print.h" "ConvexHull.h" "ConvexHull.cpp" "ConfigParser.h" "ConfigParser.cpp")
 
 # === Feature Enables ===
 if (SH_MSVC_STATIC_RUNTIME)

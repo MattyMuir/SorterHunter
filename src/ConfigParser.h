@@ -1,76 +1,31 @@
 #pragma once
-/**
- * @file ConfigParser.h 
- * @brief Config file reading service for SorterHunter
- * @author Bert Dobbelaere bert.o.dobbelaere[at]telenet[dot]be
- *
- * Copyright (c) 2022 Bert Dobbelaere
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use,
- * copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following
- * conditions:
- * 
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
- * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- * OTHER DEALINGS IN THE SOFTWARE.
- */
-
-#include "htypes.h"
 #include <string>
+#include <unordered_map>
+#include <optional>
+#include <stdexcept>
+#include <variant>
 
-/**
- * Class performing config file processing
- */
+#include "types.h"
+
+class ParseError : public std::runtime_error
+{
+public:
+	ParseError(const std::string& msg);
+};
 
 class ConfigParser
 {
-	public:
-		/**
-		 * Object init
-		 */
-		ConfigParser();
-		
-		/**
-		 * Reads a config file into the object structures
-		 * @param filename Name of config file. Will be opened for reading only.
-		 * @return true if config file was successfully read
-		 */
-		bool parseConfig(const char *filename);
-		
-		/**
-		 * Reads an integer parameter from the config file
-		 * If the parameter was not specified, the default is used
-		 * @param key Parameter name
-		 * @param defaultval Default value if parameter was not found
-		 * @return Parameter value
-		 */
-		uint64_t getInt(std::string key, uint64_t defaultval=0) const;
-		
-		/**
-		 * Reads a parameter containing sorting network pairs from the config file
-		 * An empty network is returned if the parameter was not found
-		 * @param key Parameter name
-		 * @return Network composed of CEs
-		 */
-		const Network &getNetwork(std::string key) const;
-		
-		/**
-		 * Clean up
-		 */
-		~ConfigParser();
-	private:
-		class Data;
-		Data *data;
+public:
+	void Parse(const std::string& filepath);
+
+	bool HasKey(const std::string& key) const;
+	uint64_t GetInt(const std::string& key, std::optional<uint64_t> def = std::nullopt) const;
+	const Network& GetNetwork(const std::string& key) const;
+
+protected:
+	std::unordered_map<std::string, std::variant<uint64_t, Network>> keyMap;
+
+	void AddKeyValue(const std::string& key, const std::string& valueStr);
+	static uint64_t ParseInt(const std::string& valueStr);
+	static Network ParseNetwork(const std::string& valueStr);
 };

@@ -30,7 +30,7 @@
 #include <cstdio>
 #include <cassert>
 
-#include "hutils.h"
+#include "utils.h"
 #include "prefix_processor.h"
 #include "print.h"
 
