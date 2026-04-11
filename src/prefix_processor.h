@@ -60,4 +60,4 @@ void convertToBitParallel(uint8_t ninputs, const SinglePatternList &singles, boo
  * @param rndgen Random number generator for shuffling
  * @return Number of outputs from partially ordered network (ninputs+1 if fully sorted, 2**ninputs worst case)
  */
-SortWord createGreedyPrefix(uint8_t ninputs, uint32_t maxpairs, bool use_symmetry, Network &prefix, RandGen_t &rndgen);
+SortWord createGreedyPrefix(uint8_t ninputs, uint32_t maxpairs, bool use_symmetry, Network &prefix);

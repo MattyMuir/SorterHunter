@@ -126,7 +126,6 @@ class ClusterGroup{
 		uint8_t ninputs; ///< Total number of inputs (and outputs) of the network
 };
 
-
 /**
  * Initialize an empty cluster group
  */
@@ -231,7 +230,6 @@ void ClusterGroup::combine(uint8_t ci_idx, uint8_t cj_idx)
 	p2.clear();
 }
 
-
 bool ClusterGroup::isSameCluster(CE p) const
 {
 	uint32_t	ci_idx=clusterAlloc[p.lo];
@@ -327,7 +325,6 @@ SortWord ClusterGroup::outputSize() const
 	return prod;
 }
 
-
 void computePrefixOutputs(uint8_t ninputs, const Network &prefix, SinglePatternList &patterns)
 {
 	ClusterGroup cg(ninputs);
@@ -363,89 +360,80 @@ void computePrefixOutputs(uint8_t ninputs, const Network &prefix, SinglePatternL
 	cg.computeOutputs(patterns);
 }
 
+static inline uint64_t ReverseBits(uint64_t x)
+{
+	x = std::byteswap(x);
+	x = ((x >> 1) & 0x5555555555555555ULL) | ((x & 0x5555555555555555ULL) << 1);
+	x = ((x >> 2) & 0x3333333333333333ULL) | ((x & 0x3333333333333333ULL) << 2);
+	x = ((x >> 4) & 0x0F0F0F0F0F0F0F0FULL) | ((x & 0x0F0F0F0F0F0F0F0FULL) << 4);
+	return x;
+}
+
 /**
  * For symmetric networks, any network that sorts a pattern successfully will also sort the reverse of the inverse,
  * i.e. if a symmetric network sorts '00101111', if will also sort '00001011'
  * This function is used to discard the largest of those patterns.
  */
-static bool hasSmallerMirror(uint8_t ninputs, SortWord w)
+static inline bool hasSmallerMirror(uint8_t ninputs, SortWord w)
 {
-	SortWord rw=0u;
-	SortWord tmp=w;
-	for (uint32_t k=0;k<ninputs;k++)
-	{
-		rw <<= 1;
-		rw |= ~tmp & 1u;
-		tmp >>= 1;
-	}
-	return w > rw;
+	uint64_t flipped = ~w;
+	uint64_t reversed = ReverseBits(flipped) >> (64 - ninputs);
+	return w > reversed;
 }
 
-
-static SortWord all_n_inputs_mask; ///< ninputs lowest bit to be set
+static SortWord all_n_inputs_mask;
 
 static bool isSorted(SortWord w)
 {
 	w = ~w & all_n_inputs_mask;
-	return (w&(w+1)) == 0;
+	return (w & (w + 1)) == 0;
 }
-
 
 void convertToBitParallel(uint8_t ninputs, const SinglePatternList &singles, bool use_symmetry, BitParallelList &parallels)
 {
-	uint32_t level=0;
+	uint32_t bufferWriteIdx = 0;
 	static BPWord buffer[NMAX];
 	parallels.clear();
+
+	// Create a mask with the lowest 'ninputs' bits set
+	all_n_inputs_mask = (ninputs == 64) ? ((SortWord)-1) : ((1ULL << ninputs) - 1);
 	
-	all_n_inputs_mask = 0ULL;
-	for (uint32_t k=0;k<ninputs;k++)
+	for (SortWord w : singles)
 	{
-		all_n_inputs_mask |= 1ULL << k;
-	}
-	
-	for (size_t idx=0;idx<singles.size();idx++)
-	{
-		SortWord w=singles[idx];
-		if (use_symmetry && hasSmallerMirror(ninputs, w))
-		{
-			continue; // Complement of reverse word is smaller, skip this vector if the network is symmetric
-		}
+		// Complement of reverse word is smaller, skip this vector if the network is symmetric
+		if (use_symmetry && hasSmallerMirror(ninputs, w)) continue; 
 		
-		if (isSorted(w))
-		{
-			continue; // Already sorted pattern will not be affected by sorting operation - useless as test vector
-		}
+		// Already sorted pattern will not be affected by sorting operation - useless as test vector
+		if (isSorted(w)) continue; 
 		
-		for (uint32_t b=0;b<ninputs;b++)
+		// Take the bits of this sortword, split them up and append one each to the end of the parallel words in 'buffer'
+		for (uint32_t inputIdx = 0; inputIdx < ninputs; inputIdx++)
 		{
-			buffer[b]<<=1;
-			buffer[b]|=(w&1);
-			w>>=1;
+			buffer[inputIdx] <<= 1;
+			buffer[inputIdx] |= (w & 1);
+			w >>= 1;
 		}
-		level++;
+		bufferWriteIdx++;
 		
-		if (level>=PARWORDSIZE)
+		// Check if this buffer is full
+		if (bufferWriteIdx >= PARWORDSIZE)
 		{
-			for (uint32_t b=0;b<ninputs;b++)
+			for (uint32_t b = 0; b < ninputs; b++)
 			{
 				parallels.push_back(buffer[b]);
-				buffer[b]=0; // Needed ? Probably not, but cleaner.
+				buffer[b] = 0;
 			}
-			level=0;			
+			bufferWriteIdx = 0;
 		}	
 	}
-	if (level>0)
-	{
+
+	// If the current buffer has any remaining sortwords, add them
+	if (bufferWriteIdx > 0)
 		for (uint32_t b=0;b<ninputs;b++)
-		{
 			parallels.push_back(buffer[b]);
-		}
-	}
 
 	if (Verbosity > 2)
-	{
 		PRINT("Debug: Pattern conversion: {} single inputs -> {} parallel words ({} * {}) (symmetry:{})\n", singles.size(), parallels.size(), ninputs, parallels.size()/ninputs, use_symmetry);
-	}
 }
 
 static Network alphabet; ///< "Alphabet" of possible CEs defined by their vertical positions.
@@ -472,7 +460,7 @@ static void initAlphabet(uint8_t ninputs, bool use_symmetry)
 		}
 }		
 
-SortWord createGreedyPrefix(uint8_t ninputs, uint32_t maxpairs, bool use_symmetry, Network &prefix, RandGen_t &rndgen)
+SortWord createGreedyPrefix(uint8_t ninputs, uint32_t maxpairs, bool use_symmetry, Network &prefix)
 {
 	if (Verbosity>2)
 		PRINT("Creating greedy prefix. Initial prefix size = {}, max prefix size {}.\n",prefix.size(),maxpairs);
@@ -488,7 +476,7 @@ SortWord createGreedyPrefix(uint8_t ninputs, uint32_t maxpairs, bool use_symmetr
 	{
 		Network ashuf = alphabet;
 		CE best= {0,1};
-		std::shuffle(ashuf.begin(),ashuf.end(), rndgen);
+		std::shuffle(ashuf.begin(),ashuf.end(), GlobalGen);
 		SortWord minsize = currentsize;
 
 		ClusterGroup cgbest=cg;
@@ -541,4 +529,3 @@ SortWord createGreedyPrefix(uint8_t ninputs, uint32_t maxpairs, bool use_symmetr
 	}
 	return currentsize;
 }
-

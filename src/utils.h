@@ -27,8 +27,11 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "types.h"
 #include <random>
+
+#include "types.h"
+#include "GlobalRandom.h"
+
 
 inline uint32_t min(uint32_t x,uint32_t y) { return (x<y)?x:y;} ///< Classic minimum
 inline uint32_t max(uint32_t x,uint32_t y) { return (x>y)?x:y;} ///< Classic maximum
@@ -70,9 +73,21 @@ void concatNetwork(const Network &nw1, const Network &nw2, Network &result);
  */
 void appendNetwork(Network &dst, const Network &src);
 
-// Random generation defs
+template <typename Ty>
+size_t RandomIndex(const std::vector<Ty>& vec)
+{
+	std::uniform_int_distribution<size_t> dist{ 0, vec.size() - 1 };
+	return dist(GlobalGen);
+}
 
-typedef std::mt19937_64 RandGen_t;
+template <typename Ty>
+const Ty& RandomElement(const std::vector<Ty>& vec)
+{
+	return vec[RandomIndex(vec)];
+}
 
-#define RANDIDX(v) (mtRand()%v.size())      ///< Random index from vector
-#define RANDELEM(v) (v[RANDIDX(v)])         ///< Random element from vector
+template <typename Ty>
+Ty& RandomElement(std::vector<Ty>& vec)
+{
+	return vec[RandomIndex(vec)];
+}

@@ -38,6 +38,7 @@
 #include <algorithm>
 #include <random>
 #include <ctime>
+#include <bit>
 
 #include "print.h"
 #include "types.h"
@@ -45,6 +46,7 @@
 #include "ConfigParser.h"
 #include "prefix_processor.h"
 #include "ConvexHull.h"
+#include "GlobalRandom.h"
 
 bool use_symmetry = true;							/// Treat sorting network as symmetric or not
 bool force_valid_uphill_step = true;				/// "Uphill" step inserts duplicate CE if not in final layer.
@@ -72,9 +74,6 @@ Network alphabet;
 #define NMUTATIONTYPES 6							/// Number of different mutation types
 uint32_t mutation_type_weights[NMUTATIONTYPES];		/// Relative probabilities for each mutation type
 std::vector<uint8_t> mutationSelector;				/// Helper variable to quickly pick a mutation with the requested probability.
-
-// Random generation
-RandGen_t mtRand(std::random_device{}());
 
 /**
  * Send a bit-parallel set of test patterns through a sorting network. Maximum PARWORDSIZE patterns are processed
@@ -119,7 +118,7 @@ void prepareTestVectorsFromPrefix(const Network& prefix)
 	SinglePatternList singles;
 	computePrefixOutputs(N, prefix, singles);
 
-	std::shuffle(singles.begin(), singles.end(), mtRand); // Shuffle test vectors: improve probability of early rejection of non-sorters
+	std::shuffle(singles.begin(), singles.end(), GlobalGen); // Shuffle test vectors: improve probability of early rejection of non-sorters
 
 	convertToBitParallel(N, singles, use_symmetry && is_even, parallelpatterns_from_prefix);
 }
@@ -159,28 +158,26 @@ void initalphabet()
  * @param bpl List of test vectors matching the prefix (regrouped for parallel execution)
  * @param failvector Index of first failing vector
  */
-void bumpVectorPosition(BitParallelList& bpl, size_t failvector)
+void bumpVectorPosition(BitParallelList& bpl, size_t groupIdx, size_t bitIdx)
 {
-	size_t groupno = failvector / PARWORDSIZE;
-	size_t idx = N * groupno;
-
-	if (groupno > 1)
+	if (groupIdx > 1)
 	{
-		size_t delta = N * ((groupno + 7) / 8);
 		// Move up failing vector group about 1/8 the distance to the front
+		size_t groupStartIdx = N * groupIdx;
+		size_t delta = N * ((groupIdx + 7) / 8);
 		for (size_t k = 0; k < N; k++)
 		{
-			BPWord z = bpl[idx + k - delta];
-			bpl[idx + k - delta] = bpl[idx + k];
-			bpl[idx + k] = z;
+			BPWord z = bpl[groupStartIdx + k - delta];
+			bpl[groupStartIdx + k - delta] = bpl[groupStartIdx + k];
+			bpl[groupStartIdx + k] = z;
 		}
 	}
-	else if (groupno == 1)
+	else if (groupIdx == 1)
 	{
 		// Swap with last bit position of group 0
 		BPWord m0 = 1ull << (PARWORDSIZE - 1);
-		BPWord m1 = 1ull << (failvector % PARWORDSIZE);
-		int shift = (PARWORDSIZE - 1) - (failvector % PARWORDSIZE);
+		BPWord m1 = 1ull << bitIdx;
+		int shift = (PARWORDSIZE - 1) - bitIdx;
 		for (size_t k = 0; k < N; k++)
 		{
 			BPWord old0 = bpl[k];
@@ -189,12 +186,11 @@ void bumpVectorPosition(BitParallelList& bpl, size_t failvector)
 			bpl[k + N] = (old1 & ~m1) | ((old0 & m0) >> shift);
 		}
 	}
-	else if (failvector > 0) // groupno==0, bit position >0
+	else if (bitIdx > 0) // groupno==0, bit position >0
 	{
-		//assert(failvector<PARWORDSIZE);
 		// Swap with neighbouring bit position within group 0
-		BPWord m0 = 1ull << (failvector - 1);
-		BPWord m1 = 1ull << failvector;
+		BPWord m0 = 1ull << (bitIdx - 1);
+		BPWord m1 = 1ull << bitIdx;
 		for (size_t k = 0; k < N; k++)
 		{
 			BPWord old = bpl[k];
@@ -202,7 +198,6 @@ void bumpVectorPosition(BitParallelList& bpl, size_t failvector)
 		}
 	}
 }
-
 
 /**
  * Test a candidate network complementing the prefix.
@@ -214,36 +209,29 @@ void bumpVectorPosition(BitParallelList& bpl, size_t failvector)
  */
 bool testpairsFromPrefixOutput(const Network& pairs, BitParallelList& bpl)
 {
-	size_t idx = 0;
-	size_t failvector = 0;
-
-	while (idx < bpl.size())
+	for (size_t groupIdx = 0; groupIdx < bpl.size() / N; groupIdx++)
 	{
-		static BPWord data[NMAX];
+		// Copy this group into 'currentGroup'
+		static BPWord currentGroup[NMAX];
+		memcpy(currentGroup, bpl.data() + groupIdx * N, N * sizeof(BPWord));
+
+		// Sort PARWORDSIZE inputs in parallel
+		applyBitParallelSort(currentGroup, pairs);
+
+		// Scan for forbidden 1 -> 0 transition
 		BPWord accum = 0;
-
-		for (size_t k = 0; k < N; k++)
-			data[k] = bpl[idx + k];
-
-		applyBitParallelSort(data, pairs);
-
 		for (size_t k = 0; k < (N - 1u); k++)
-			accum |= data[k] & ~data[k + 1]; // Scan for forbidden 1 -> 0 transition
-		if (accum != 0ULL)
+			accum |= currentGroup[k] & ~currentGroup[k + 1];
+
+		// If found, determine which input within the group was incorrectly sorted
+		if (accum)
 		{
-			while ((accum & 1ull) == 0)
-			{
-				accum >>= 1;
-				failvector++;
-			}
-
-			bumpVectorPosition(bpl, failvector);
-
+			size_t bitIdx = std::countr_zero(accum);
+			bumpVectorPosition(bpl, groupIdx, bitIdx);
 			return false;
 		}
-		idx += N;
-		failvector += PARWORDSIZE;
 	}
+
 	return true;
 }
 
@@ -321,7 +309,7 @@ static Network copyValidPairs(const Network& nw, uint32_t ninputs)
 void fillprefixGreedyA(Network& prefix, uint32_t npairs)
 {
 	prefix.clear();
-	SortWord sizetmp = createGreedyPrefix(N, npairs, use_symmetry, prefix, mtRand);
+	SortWord sizetmp = createGreedyPrefix(N, npairs, use_symmetry, prefix);
 	if (Verbosity > 1)
 	{
 		PRINT("Greedy prefix size {}, span {}.\n", prefix.size(), (size_t)sizetmp);
@@ -336,7 +324,7 @@ void fillprefixGreedyA(Network& prefix, uint32_t npairs)
 void fillprefixFixedThenGreedyA(Network& prefix, uint32_t npairs)
 {
 	prefix = copyValidPairs(FixedPrefix, N);
-	SortWord sizetmp = createGreedyPrefix(N, npairs + prefix.size(), use_symmetry, prefix, mtRand);
+	SortWord sizetmp = createGreedyPrefix(N, npairs + prefix.size(), use_symmetry, prefix);
 	if (Verbosity > 2)
 	{
 		PRINT("Hybrid prefix size {}, span {}.\n", prefix.size(), (size_t)sizetmp);
@@ -352,14 +340,14 @@ void fillprefixFixedThenGreedyA(Network& prefix, uint32_t npairs)
 uint32_t attemptMutation(Network& newpairs)
 {
 	uint32_t applied = 0; // Nothing
-	uint32_t mtype = 1 + RANDELEM(mutationSelector);
+	uint32_t mtype = 1 + RandomElement(mutationSelector);
 
 	switch (mtype)
 	{
 	case 1:
 		if (!newpairs.empty())   // Removal of random pair from list
 		{
-			uint32_t a = RANDIDX(newpairs);
+			uint32_t a = RandomIndex(newpairs);
 			newpairs.erase(newpairs.begin() + a);
 			applied = mtype;
 		}
@@ -367,8 +355,8 @@ uint32_t attemptMutation(Network& newpairs)
 	case 2:
 		if (newpairs.size() > 1) // Swap two pairs at random positions in list
 		{
-			uint32_t a = RANDIDX(newpairs);
-			uint32_t b = RANDIDX(newpairs);
+			uint32_t a = RandomIndex(newpairs);
+			uint32_t b = RandomIndex(newpairs);
 			if (a > b) { uint32_t z = a; a = b; b = z; }
 			if (newpairs[a] != newpairs[b])
 			{
@@ -410,8 +398,8 @@ uint32_t attemptMutation(Network& newpairs)
 	case 3:
 		if (!newpairs.empty())  // Replace a pair at a random position with another random pair
 		{
-			uint32_t a = RANDIDX(newpairs);
-			CE p = RANDELEM(alphabet);
+			uint32_t a = RandomIndex(newpairs);
+			CE p = RandomElement(alphabet);
 			if (newpairs[a] != p)
 			{
 				newpairs[a] = p;
@@ -422,8 +410,8 @@ uint32_t attemptMutation(Network& newpairs)
 	case 4:
 		if (newpairs.size() > 1) // Cross two pairs at random positions in list
 		{
-			uint32_t a = RANDIDX(newpairs);
-			uint32_t b = RANDIDX(newpairs);
+			uint32_t a = RandomIndex(newpairs);
+			uint32_t b = RandomIndex(newpairs);
 			uint8_t alo = newpairs[a].lo;
 			uint8_t ahi = newpairs[a].hi;
 			uint8_t blo = newpairs[b].lo;
@@ -431,7 +419,7 @@ uint32_t attemptMutation(Network& newpairs)
 
 			if ((alo != blo) && (alo != bhi) && (ahi != blo) && (ahi != bhi))
 			{
-				uint32_t r2 = mtRand() % 2;
+				uint32_t r2 = GlobalGen() % 2;
 				uint32_t x = r2 ? bhi : blo;
 				uint32_t y = r2 ? blo : bhi;
 				newpairs[a].lo = min(alo, x);
@@ -445,7 +433,7 @@ uint32_t attemptMutation(Network& newpairs)
 	case 5:
 		if (newpairs.size() > 1) // Swap neighbouring intersecting pairs - special case of type r=2.
 		{
-			uint32_t a = RANDIDX(newpairs);
+			uint32_t a = RandomIndex(newpairs);
 			uint8_t alo = newpairs[a].lo;
 			uint8_t ahi = newpairs[a].hi;
 			for (uint32_t b = a + 1; b < newpairs.size(); b++)
@@ -469,12 +457,12 @@ uint32_t attemptMutation(Network& newpairs)
 	case 6:
 		if (!newpairs.empty()) // Change one half of a pair - special case of type r=3.
 		{
-			uint32_t a = RANDIDX(newpairs);
+			uint32_t a = RandomIndex(newpairs);
 			CE p = newpairs[a];
 			CE q;
 			do
 			{
-				q = RANDELEM(alphabet);
+				q = RandomElement(alphabet);
 			} while ((q.lo != p.lo) && (q.hi != p.lo) && (q.lo != p.hi) && (q.hi != p.hi));
 
 			if (q != p)
@@ -554,7 +542,7 @@ int main(int argc, char* argv[])
 	}
 
 	if (cp.HasKey("RandomSeed"))
-		mtRand.seed(cp.GetInt("RandomSeed"));
+		GlobalGen.seed(cp.GetInt("RandomSeed"));
 
 	N = cp.GetInt("Ninputs");
 	use_symmetry = cp.GetInt("Symmetric");
@@ -578,7 +566,8 @@ int main(int argc, char* argv[])
 		exit(1);
 	}
 	PrefixType = cp.GetInt("PrefixType", 0);
-	FixedPrefix = cp.GetNetwork("FixedPrefix");
+	if (PrefixType == 1)
+		FixedPrefix = cp.GetNetwork("FixedPrefix");
 	GreedyPrefixSize = cp.GetInt("GreedyPrefixSize", 0);
 	RestartRate = cp.GetInt("RestartRate", 0);
 	Verbosity = cp.GetInt("Verbosity", 1);
@@ -650,7 +639,7 @@ int main(int argc, char* argv[])
 				bool found_useful_ce = false;
 				do
 				{
-					p = RANDELEM(alphabet);
+					p = RandomElement(alphabet);
 
 					if ((((failed_output_pattern >> p.lo) & 1) == 1) && (((failed_output_pattern >> p.hi) & 1) == 0))
 						found_useful_ce = true;
@@ -665,7 +654,7 @@ int main(int argc, char* argv[])
 			}
 			else // In case of postfix: just append a random initial pair to the core network, cannot directly determine good candidate from failed output pattern.
 			{
-				p = RANDELEM(alphabet);
+				p = RandomElement(alphabet);
 			}
 
 			pairs.push_back(p);
@@ -705,7 +694,7 @@ int main(int argc, char* argv[])
 
 			if (MaxMutations > 1)
 			{
-				nmods += mtRand() % MaxMutations;
+				nmods += GlobalGen() % MaxMutations;
 			}
 
 			/* Create a copy of the accepted set of pairs */
@@ -717,9 +706,7 @@ int main(int argc, char* argv[])
 			{
 				uint32_t r = attemptMutation(newpairs);
 				if (r != 0)
-				{
 					modcount++;
-				}
 			}
 
 			/* Create a symmetric expansion of the modified pairs (or just a copy if non-symmetric network) */
@@ -745,11 +732,11 @@ int main(int argc, char* argv[])
 				checkImproved(totalnw);
 			}
 
-			/* With low probability, add another pair random pair at a random place. Attempt to escape from local optimum. */
-			if ((EscapeRate > 0) && ((mtRand() % EscapeRate) == 0))
+			/* With low probability, add another random pair at a random place. Attempt to escape from local optimum. */
+			if ((EscapeRate > 0) && ((GlobalGen() % EscapeRate) == 0))
 			{
-				int a = mtRand() % (pairs.size() + 1); // Random insertion position
-				CE p = RANDELEM(alphabet);
+				int a = GlobalGen() % (pairs.size() + 1); // Random insertion position
+				CE p = RandomElement(alphabet);
 
 				// Determine if the random pair p could be added in the last layer
 				bool hit_successor = false;
@@ -772,7 +759,7 @@ int main(int argc, char* argv[])
 				}
 			}
 
-			if ((RestartRate > 0) && ((mtRand() % RestartRate) == 0))
+			if ((RestartRate > 0) && ((GlobalGen() % RestartRate) == 0))
 			{
 				if (Verbosity > 1)
 				{
