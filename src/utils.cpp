@@ -31,76 +31,17 @@
 
 #include "print.h"
 
-uint32_t computeDepth(const Network &nw)
+Network symmetricExpansion(uint8_t ninputs, const Network &inpairs)
 {
-	std::vector<SortWord> layers;
-	int nlayers=0;
-	
-	for (size_t k=0;k<nw.size();k++)
+	Network outpairs;
+	for (const CE& inpair : inpairs)
 	{
-		uint32_t i=nw[k].lo;
-		uint32_t j=nw[k].hi;
-		int matchidx=nlayers;
-		int idx=nlayers-1;
-		while (idx>=0)
-		{
-			if ((layers[idx] & ((1ULL<<i)|(1ULL<<j))) == 0)
-			{
-				matchidx=idx;
-			}
-			else
-			{
-				break;
-			}
-			idx--;
-		}
-		if (matchidx>=nlayers)
-		{
-			layers.push_back(0);
-			nlayers++;
-		}
-		layers[matchidx]|= 1ULL<<i;
-		layers[matchidx]|= 1ULL<<j;
-	}
-	
-	return nlayers;
-}
+		outpairs.push_back(inpair);
+		if (inpair.lo + inpair.hi == ninputs - 1) continue;
 
-void printnw(const Network &nw)
-{
-	PRINT("[");
-	for (size_t k=0;k<nw.size();k++)
-	{
-		PRINT("({},{})",nw[k].lo,nw[k].hi);
-		PRINT("{}", ((k+1)<nw.size()) ? ',':']');
+		CE sp = { (uint8_t)(ninputs - 1 - inpair.hi), (uint8_t)(ninputs - 1 - inpair.lo) };
+		outpairs.push_back(sp);
 	}
-	PRINT("}}\r\n");
-}
 
-void symmetricExpansion(uint8_t ninputs, const Network &inpairs, Network &outpairs)
-{
-	outpairs.clear();
-	for (size_t k=0;k<inpairs.size();k++)
-	{
-		outpairs.push_back(inpairs[k]);
-		if ((inpairs[k].lo+inpairs[k].hi)!=(ninputs-1)) // Don't duplicate pair that maps on itself
-		{
-			CE sp={(uint8_t)(ninputs-1-inpairs[k].hi), (uint8_t)(ninputs-1-inpairs[k].lo)};
-			outpairs.push_back(sp);
-		}
-	}
-}
-
-void concatNetwork(const Network &nw1, const Network &nw2, Network &result)
-{
-	result=nw1;
-	result.insert(result.end(),nw2.begin(),nw2.end());
-}
-
-void appendNetwork(Network &dst, const Network &src)
-{
-	if (!src.empty())
-	{
-		dst.insert(dst.end(),src.begin(),src.end());
-	}
+	return outpairs;
 }

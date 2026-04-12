@@ -1,17 +1,17 @@
 #include "NetworkMutator.h"
 
-#include "utils.h"
+#include "GlobalRandom.h"
 
-NetworkMutator::NetworkMutator(const ConfigParser& cp, const std::vector<CE>& alphabet_)
+NetworkMutator::NetworkMutator(const std::vector<CE>& alphabet_)
 	: alphabet(alphabet_)
 {
 	uint32_t mutationWeights[NMUTATIONTYPES];
-	mutationWeights[MutationRemovePair]				= cp.GetInt("WeigthRemovePair", 1);
-	mutationWeights[MutationSwapPairs]				= cp.GetInt("WeigthSwapPairs", 1);
-	mutationWeights[MutationReplacePair]			= cp.GetInt("WeigthReplacePair", 1);
-	mutationWeights[MutationCrossPairs]				= cp.GetInt("WeightCrossPairs", 1);
-	mutationWeights[MutationSwapIntersectingPairs]	= cp.GetInt("WeightSwapIntersectingPairs", 1);
-	mutationWeights[MutationReplaceHalfPair]		= cp.GetInt("WeightReplaceHalfPair", 1);
+	mutationWeights[MutationRemovePair]				= Config::GetInt("WeigthRemovePair", 1);
+	mutationWeights[MutationSwapPairs]				= Config::GetInt("WeigthSwapPairs", 1);
+	mutationWeights[MutationReplacePair]			= Config::GetInt("WeigthReplacePair", 1);
+	mutationWeights[MutationCrossPairs]				= Config::GetInt("WeightCrossPairs", 1);
+	mutationWeights[MutationSwapIntersectingPairs]	= Config::GetInt("WeightSwapIntersectingPairs", 1);
+	mutationWeights[MutationReplaceHalfPair]		= Config::GetInt("WeightReplaceHalfPair", 1);
 
 	// Build LUT for fast weighted selection
 	for (uint8_t typeIdx = 0; typeIdx < NMUTATIONTYPES; typeIdx++)
@@ -127,12 +127,12 @@ bool NetworkMutator::CrossPairs(Network& network)
 	if ((alo == blo) || (alo == bhi) || (ahi == blo) || (ahi == bhi)) return false;
 
 	uint32_t r2 = GlobalGen() % 2;
-	uint32_t x = r2 ? bhi : blo;
-	uint32_t y = r2 ? blo : bhi;
-	network[a].lo = min(alo, x);
-	network[a].hi = max(alo, x);
-	network[b].lo = min(ahi, y);
-	network[b].hi = max(ahi, y);
+	uint8_t x = r2 ? bhi : blo;
+	uint8_t y = r2 ? blo : bhi;
+	network[a].lo = std::min(alo, x);
+	network[a].hi = std::max(alo, x);
+	network[b].lo = std::min(ahi, y);
+	network[b].hi = std::max(ahi, y);
 	return true;
 }
 

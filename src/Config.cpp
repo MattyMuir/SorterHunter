@@ -1,4 +1,4 @@
-#include "ConfigParser.h"
+#include "Config.h"
 
 #include <cinttypes>
 #include <fstream>
@@ -30,6 +30,8 @@ static const std::unordered_map<std::string, KeyType> allKeys{
 	{ "InitialNetwork",					KeyType::Network },
 };
 
+static std::unordered_map<std::string, std::variant<uint64_t, Network>> keyMap;
+
 ParseError::ParseError(const std::string& msg)
 	: std::runtime_error(msg) {}
 
@@ -50,7 +52,7 @@ static std::vector<std::string> Split(std::string_view str, char delim)
 	return parts;
 }
 
-void ConfigParser::Parse(const std::string& filepath)
+void Config::Parse(const std::string& filepath)
 {
 	// Open file
 	std::ifstream file{ filepath };
@@ -72,25 +74,31 @@ void ConfigParser::Parse(const std::string& filepath)
 	}
 }
 
-bool ConfigParser::HasKey(const std::string& key) const
+bool Config::HasKey(const std::string& key)
 {
 	return keyMap.contains(key);
 }
 
-uint64_t ConfigParser::GetInt(const std::string& key, std::optional<uint64_t> def) const
+uint64_t Config::GetInt(const std::string& key, std::optional<uint64_t> def)
 {
 	if (keyMap.contains(key)) return std::get<uint64_t>(keyMap.at(key));
 	if (def.has_value()) return def.value();
 	throw ParseError{ std::format("Config missing required key '{}'", key) };
 }
 
-const Network& ConfigParser::GetNetwork(const std::string& key) const
+const Network& Config::GetNetwork(const std::string& key, const std::optional<Network>& def)
 {
 	if (keyMap.contains(key)) return std::get<Network>(keyMap.at(key));
-	throw ParseError{ std::format("Config has no key '{}'", key) };
+	if (def.has_value()) return def.value();
+	throw ParseError{ std::format("Config missing required key '{}'", key) };
 }
 
-void ConfigParser::AddKeyValue(const std::string& key, const std::string& valueStr)
+Verbosity Config::Verbosity()
+{
+	return (::Verbosity)GetInt("Verbosity", VerbosityMinimal);
+}
+
+void Config::AddKeyValue(const std::string& key, const std::string& valueStr)
 {
 	if (!allKeys.contains(key))
 		throw ParseError{ std::format("Invalid config key '{}'", key) };
@@ -109,7 +117,7 @@ void ConfigParser::AddKeyValue(const std::string& key, const std::string& valueS
 	}
 }
 
-uint64_t ConfigParser::ParseInt(const std::string& valueStr)
+uint64_t Config::ParseInt(const std::string& valueStr)
 {
 	uint64_t value;
 	auto [ptr, errc] = std::from_chars(valueStr.data(), valueStr.data() + valueStr.size(), value);
@@ -118,7 +126,7 @@ uint64_t ConfigParser::ParseInt(const std::string& valueStr)
 	return value;
 }
 
-Network ConfigParser::ParseNetwork(const std::string& valueStr)
+Network Config::ParseNetwork(const std::string& valueStr)
 {
 	Network network;
 	uint8_t lo, hi;

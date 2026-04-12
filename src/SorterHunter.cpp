@@ -1,9 +1,303 @@
 #include "SorterHunter.h"
 
-SorterHunter::SorterHunter(uint8_t N_, const Network& prefix_)
-	: N(N_), prefix(prefix_) {}
+#include <bit>
+
+#include "version.h"
+#include "print.h"
+#include "Config.h"
+#include "prefix_processor.h"
+#include "GlobalRandom.h"
+#include "utils.h"
+
+SorterHunter::SorterHunter(const PrefixGenerator& prefixGenerator_, const Network& postfix_, const std::vector<CE>& alphabet_)
+	: prefixGenerator(prefixGenerator_),
+	postfix(postfix_),
+	alphabet(alphabet_),
+	N(Config::GetInt("Ninputs")),
+	symmetric(Config::GetInt("Symmetric", 0)),
+	maxMutations(Config::GetInt("MaxMutations", 1)),
+	escapeRate(Config::GetInt("EscapeRate", 0)),
+	restartRate(Config::GetInt("RestartRate", 0)),
+	mutator(alphabet_)
+{}
 
 void SorterHunter::Hunt()
 {
+	// Generate the prefix
+	prefix = prefixGenerator.Generate();
 
+	// Prepare the test vectors based on the prefix
+	PrepareTestVectors();
+
+	// Outer loop - restart from here if restart is triggered
+	for (;;)
+	{
+		// Load the provided initial network
+		if (Config::HasKey("InitialNetwork"))
+			networkCore = Config::GetNetwork("InitialNetwork");
+
+		// Build an initial solution naively
+		ProduceInitialSolution();
+
+		// Program never ends, keep trying to improve, we may restart in the outer loop however
+		for (;; epoch++)
+		{
+			if (Config::Verbosity() >= VerbosityDebug) LogEpoch();
+
+			// Mutate network
+			Network mutatedCore{ networkCore };
+			mutator.MutateMulti(mutatedCore, maxMutations);
+
+			// Symmetrically expand new network and add postfix
+			Network mutatedWithPostfix = symmetric ? symmetricExpansion(N, mutatedCore) : mutatedCore;
+			mutatedWithPostfix = Concatenate(mutatedWithPostfix, postfix);
+
+			// Test if this network is a valid sorter
+			if (TestNetworkAndBump(mutatedWithPostfix))
+			{
+				networkCore = mutatedCore;
+				RegisterValidCore();
+			}
+
+			// With low probability, add another random pair at a random place to attempt to escape from local minima
+			if (escapeRate > 0 && (GlobalGen() % escapeRate) == 0)
+				UphillStep();
+
+			// With low probability, restart using outer loop
+			if (restartRate > 0 && (GlobalGen() % restartRate) == 0)
+			{
+				Restart();
+				break;
+			}
+		}
+	}
+}
+
+void SorterHunter::PrepareTestVectors()
+{
+	// Compute all possible outputs from the prefix
+	SinglePatternList singles;
+	computePrefixOutputs(N, prefix, singles);
+
+	// Shuffle test vectors to improve probability of early rejection of non-sorters
+	std::shuffle(singles.begin(), singles.end(), GlobalGen);
+
+	// Pack the possible prefix outputs into a bit-parallel list
+	convertToBitParallel(N, singles, Config::GetInt("Symmetric"), testVectors);
+}
+
+void SorterHunter::ProduceInitialSolution()
+{
+	// Produce initial solution, simply by adding random pairs until we found a valid network. In case no postfix is present, we demand that the added pair
+	// fixes at least one of the output inversions in the first detected error output vector, so it does at least some useful work to help sorting the outputs.
+	// In case there is a postfix network, this check is not implemented.
+	for (;;)
+	{
+		// Symmetrically expand the network and concatenate with the postfix
+		Network se = symmetric ? symmetricExpansion(N, networkCore) : networkCore;
+		se = Concatenate(se, postfix);
+
+		// Test the network
+		auto [networkIsValid, problemInput] = TestNetwork(se);
+		if (networkIsValid) break;
+
+		if (!postfix.empty()) networkCore.push_back(RandomElement(alphabet));
+		else
+		{
+			CE newCE;
+			bool foundNewCE = false;
+			do
+			{
+				newCE = RandomElement(alphabet);
+
+				if ((((problemInput >> newCE.lo) & 1) == 1) && (((problemInput >> newCE.hi) & 1) == 0))
+					foundNewCE = true;
+
+				if (symmetric)
+					if ((((problemInput >> ((N - 1) - newCE.hi)) & 1) == 1) && (((problemInput >> ((N - 1) - newCE.lo)) & 1) == 0))
+						foundNewCE = true;
+
+			} while (!foundNewCE);
+
+			networkCore.push_back(newCE);
+		}
+	}
+}
+
+void SorterHunter::RunNetwork(const Network& network, BPWord* inputs)
+{
+	for (auto [i, j] : network)
+	{
+		BPWord iold = inputs[i];
+		inputs[i] &= inputs[j];
+		inputs[j] |= iold;
+	}
+}
+
+std::pair<bool, SortWord> SorterHunter::TestNetwork(const Network& network)
+{
+	for (size_t groupIdx = 0; groupIdx < testVectors.size() / N; groupIdx++)
+	{
+		// Copy this group into 'currentGroup'
+		static BPWord currentGroup[NMAX];
+		memcpy(currentGroup, testVectors.data() + groupIdx * N, N * sizeof(BPWord));
+
+		// Sort PARWORDSIZE inputs in parallel
+		RunNetwork(network, currentGroup);
+
+		// Scan for forbidden 1 -> 0 transition
+		BPWord accum = 0;
+		for (size_t k = 0; k < (N - 1u); k++)
+			accum |= currentGroup[k] & ~currentGroup[k + 1];
+
+		// If found, determine which input within the group was incorrectly sorted
+		if (accum)
+		{
+			size_t bitIdx = std::countr_zero(accum);
+			
+			// Convert failing output into serial word
+			SortWord problemOutput = 0;
+			for (uint8_t inputIdx = 0; inputIdx < N; inputIdx++)
+			{
+				uint64_t bit = (currentGroup[inputIdx] >> bitIdx) & 1;
+				problemOutput |= bit << inputIdx;
+			}
+
+			return { false, problemOutput };
+		}
+	}
+
+	return { true, 0 };
+}
+
+bool SorterHunter::TestNetworkAndBump(const Network& network)
+{
+	for (size_t groupIdx = 0; groupIdx < testVectors.size() / N; groupIdx++)
+	{
+		// Copy this group into 'currentGroup'
+		static BPWord currentGroup[NMAX];
+		memcpy(currentGroup, testVectors.data() + groupIdx * N, N * sizeof(BPWord));
+
+		// Sort PARWORDSIZE inputs in parallel
+		RunNetwork(network, currentGroup);
+
+		// Scan for forbidden 1 -> 0 transition
+		BPWord accum = 0;
+		for (size_t k = 0; k < (N - 1u); k++)
+			accum |= currentGroup[k] & ~currentGroup[k + 1];
+
+		// If found, determine which input within the group was incorrectly sorted
+		if (accum)
+		{
+			size_t bitIdx = std::countr_zero(accum);
+			BumpVectorPosition(groupIdx, bitIdx);
+			return false;
+		}
+	}
+
+	return true;
+}
+
+void SorterHunter::BumpVectorPosition(size_t groupIdx, size_t bitIdx)
+{
+	if (groupIdx > 1)
+	{
+		// Move up failing vector group about 1/8 the distance to the front
+		size_t groupStartIdx = N * groupIdx;
+		size_t delta = N * ((groupIdx + 7) / 8);
+		for (size_t k = 0; k < N; k++)
+		{
+			BPWord z = testVectors[groupStartIdx + k - delta];
+			testVectors[groupStartIdx + k - delta] = testVectors[groupStartIdx + k];
+			testVectors[groupStartIdx + k] = z;
+		}
+	}
+	else if (groupIdx == 1)
+	{
+		// Swap with last bit position of group 0
+		BPWord m0 = 1ull << (PARWORDSIZE - 1);
+		BPWord m1 = 1ull << bitIdx;
+		int shift = (PARWORDSIZE - 1) - bitIdx;
+		for (size_t k = 0; k < N; k++)
+		{
+			BPWord old0 = testVectors[k];
+			BPWord old1 = testVectors[k + N];
+			testVectors[k] = (old0 & ~m0) | ((old1 & m1) << shift);
+			testVectors[k + N] = (old1 & ~m1) | ((old0 & m0) >> shift);
+		}
+	}
+	else if (bitIdx > 0) // groupno==0, bit position >0
+	{
+		// Swap with neighbouring bit position within group 0
+		BPWord m0 = 1ull << (bitIdx - 1);
+		BPWord m1 = 1ull << bitIdx;
+		for (size_t k = 0; k < N; k++)
+		{
+			BPWord old = testVectors[k];
+			testVectors[k] = (old & ~m0 & ~m1) | ((old & m1) >> 1) | ((old & m0) << 1);
+		}
+	}
+}
+
+void SorterHunter::LogEpoch()
+{
+	//if (epoch % 100000 == 0) PRINT("Epoch: {}\n", epoch);
+}
+
+void SorterHunter::RegisterValidCore()
+{
+	// Concatenate with prefix and postfix and calculate properties
+	Network totalNetwork = symmetric ? symmetricExpansion(N, networkCore) : networkCore;
+	totalNetwork = Concatenate(prefix, Concatenate(totalNetwork, postfix));
+	size_t size = totalNetwork.size();
+	uint32_t depth = ComputeDepth(totalNetwork);
+
+	// Check if this network improves the convex hull
+	if (!convexHull.AddEntry(size, depth)) return;
+
+	// Reduce spam output by excluding neworks worse than bubblesort
+	bool betterThanBubble = (size <= ((N * (N - 1)) / 2));
+	if (!betterThanBubble && Config::Verbosity() < VerbosityHigh) return;
+
+	// Print metadata and network
+	PRINT(" {{'N':{},'L':{},'D':{},'sw':'{}','Prefix':{},'Postfix':{},'nw':", N, size, depth, VERSION, prefix.size(), postfix.size());
+	PrintNetwork(totalNetwork);
+	convexHull.Print();
+}
+
+void SorterHunter::UphillStep()
+{
+	// Choose random insertion position and new CE
+	size_t insertPos = GlobalGen() % (networkCore.size() + 1);
+	CE newCE = RandomElement(alphabet);
+
+	// If not forcing a valid step, just add the pair straight away
+	if (!Config::GetInt("ForceValidUphillStep", 1))
+	{
+		networkCore.insert(networkCore.begin() + insertPos, newCE);
+		return;
+	}
+
+	// Determine if the new pair is within the last layer
+	bool inLastLayer = true;
+	for (size_t ceIdx = insertPos; ceIdx < networkCore.size(); ceIdx++)
+	{
+		auto [lo, hi] = networkCore[ceIdx];
+		if ((lo == newCE.lo) || (hi == newCE.lo) || (lo == newCE.hi) || (hi == newCE.hi))
+		{
+			inLastLayer = false;
+			break;
+		}
+	}
+
+	// If in the last layer, add this pair
+	// Otherwise, add a duplicate of the pair already at this position
+	if (inLastLayer) networkCore.insert(networkCore.begin() + insertPos, newCE);
+	else networkCore.insert(networkCore.begin() + insertPos, networkCore[insertPos]);
+}
+
+void SorterHunter::Restart()
+{
+	if (Config::Verbosity() >= VerbosityHigh) PRINT("Restart.\n");
+	prefix = prefixGenerator.Generate();
 }

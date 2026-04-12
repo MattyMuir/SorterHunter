@@ -33,14 +33,9 @@
 #define NMAX (64)
 #define PARWORDSIZE (64)
 
-struct CE
-{
-	uint8_t lo, hi;
-	auto operator<=>(const CE& other) const = default;
-};
+
 
 using SortWord = uint64_t;
 using BPWord = uint64_t;							/// Bit-parallel operation word, needs to contain at least PARWORDSIZE bits 
-using Network = std::vector<CE>;
 using SinglePatternList = std::vector<SortWord>;
 using BitParallelList = std::vector<BPWord>;

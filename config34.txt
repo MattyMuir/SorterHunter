@@ -1,3 +1,0 @@
-Ninputs = 16
-Symmetric = 1
-MaxMutations = 3

@@ -33,8 +33,8 @@
 #include "utils.h"
 #include "prefix_processor.h"
 #include "print.h"
-
-extern uint32_t Verbosity;
+#include "Config.h"
+#include "GlobalRandom.h"
 
 /**
  * Replaces a *sorted* list of patterns applied to a network containing a single CE by the sorted list of output patterns of that network.
@@ -432,41 +432,16 @@ void convertToBitParallel(uint8_t ninputs, const SinglePatternList &singles, boo
 		for (uint32_t b=0;b<ninputs;b++)
 			parallels.push_back(buffer[b]);
 
-	if (Verbosity > 2)
+	if (Config::Verbosity() >= VerbosityDebug)
 		PRINT("Debug: Pattern conversion: {} single inputs -> {} parallel words ({} * {}) (symmetry:{})\n", singles.size(), parallels.size(), ninputs, parallels.size()/ninputs, use_symmetry);
-}
-
-static Network alphabet; ///< "Alphabet" of possible CEs defined by their vertical positions.
-
-/**
- * Initialize alphabet of CEs. 
- * @param ninputs Number of network inputs
- * @param use_symmetry If set to true duplicates due to mirroring will be omitted
- */
-static void initAlphabet(uint8_t ninputs, bool use_symmetry)
-{
-	alphabet.clear();
-	for (uint32_t i=0;i<(ninputs-1u);i++)
-		for (uint32_t j=i+1;j<ninputs;j++)
-		{
-			uint8_t isym=ninputs-1-j;
-			uint8_t jsym=ninputs-1-i;
-			
-			if (!use_symmetry || (isym>i) || ((isym==i) && (jsym>=j)))
-			{
-				CE p={(uint8_t)i,(uint8_t)j};
-				alphabet.push_back(p);
-			}	
-		}
 }		
 
-SortWord createGreedyPrefix(uint8_t ninputs, uint32_t maxpairs, bool use_symmetry, Network &prefix)
+SortWord createGreedyPrefix(uint8_t ninputs, uint32_t maxpairs, bool use_symmetry, const std::vector<CE>& alphabet, Network &prefix)
 {
-	if (Verbosity>2)
+	if (Config::Verbosity() >= VerbosityDebug)
 		PRINT("Creating greedy prefix. Initial prefix size = {}, max prefix size {}.\n",prefix.size(),maxpairs);
 
 	ClusterGroup cg(ninputs);
-	initAlphabet(ninputs, use_symmetry);
 
 	for (size_t k=0;k<prefix.size();k++)
 		cg.preSort(prefix[k]);
@@ -504,14 +479,14 @@ SortWord createGreedyPrefix(uint8_t ninputs, uint32_t maxpairs, bool use_symmetr
 		if (minsize>=currentsize)
 		{
 			// Found no improvement
-			if (Verbosity>2)
+			if (Config::Verbosity() >= VerbosityDebug)
 			{
 				PRINT("Greedy algorithm: no further improvement.\n");
 			}
 			break;
 		}
 		cg=cgbest;
-		if (Verbosity>2)
+		if (Config::Verbosity() >= VerbosityDebug)
 		{
 			PRINT("Greedy: adding pair ({},{})\n",best.lo,best.hi);
 		}
@@ -519,7 +494,7 @@ SortWord createGreedyPrefix(uint8_t ninputs, uint32_t maxpairs, bool use_symmetr
 		if (use_symmetry && ((best.lo+best.hi) != (ninputs-1)))
 		{
 			CE p = { (uint8_t)(ninputs-1-best.hi), (uint8_t)(ninputs-1-best.lo) };
-			if (Verbosity>2)
+			if (Config::Verbosity() >= VerbosityDebug)
 			{
 				PRINT("Greedy: adding symmetric pair ({},{})\n",p.lo,p.hi);
 			}

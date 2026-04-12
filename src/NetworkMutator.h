@@ -1,6 +1,6 @@
 #pragma once
-#include "types.h"
-#include "ConfigParser.h"
+#include "Network.h"
+#include "Config.h"
 
 class NetworkMutator
 {
@@ -17,7 +17,7 @@ protected:
 	};
 
 public:
-	NetworkMutator(const ConfigParser& cp, const std::vector<CE>& alphabet_);
+	NetworkMutator(const std::vector<CE>& alphabet_);
 
 	void MutateMulti(Network& network, size_t maxMutations);
 	void MutateOnce(Network& network);
