@@ -3,7 +3,7 @@
 #SBATCH --job-name=SorterHunter
 #SBATCH -N 1
 #SBATCH -c 128
-#SBATCH --mem=100G
+#SBATCH --mem=10G
 #SBATCH --time=0-00:10:00
 #SBATCH --gres=tmp:1G
 #SBATCH -p test
