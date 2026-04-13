@@ -63,11 +63,11 @@ void SorterHunter::Hunt(size_t epochs)
 			}
 
 			// With low probability, add another random pair at a random place to attempt to escape from local minima
-			if (escapeRate > 0 && (GlobalGen() % escapeRate) == 0)
+			if (escapeRate > 0 && (GlobalGen()() % escapeRate) == 0)
 				UphillStep();
 
 			// With low probability, restart using outer loop
-			if (restartRate > 0 && (GlobalGen() % restartRate) == 0)
+			if (restartRate > 0 && (GlobalGen()() % restartRate) == 0)
 			{
 				Restart();
 				break;
@@ -85,7 +85,7 @@ void SorterHunter::PrepareTestVectors()
 	computePrefixOutputs(N, prefix, singles);
 
 	// Shuffle test vectors to improve probability of early rejection of non-sorters
-	std::shuffle(singles.begin(), singles.end(), GlobalGen);
+	std::shuffle(singles.begin(), singles.end(), GlobalGen());
 
 	// Pack the possible prefix outputs into a bit-parallel list
 	convertToBitParallel(N, singles, Config::GetInt("Symmetric"), testVectors);
@@ -214,7 +214,7 @@ bool SorterHunter::TestNetworkAndBump(const Network& network)
 		// If found, determine which input within the group was incorrectly sorted
 		if (!_mm256_testz_si256(accum, accum))
 		{
-			size_t bitIdx = CountrZero(accum);
+			//size_t bitIdx = CountrZero(accum);
 			//BumpVectorPosition(groupIdx, bitIdx);
 			return false;
 		}
@@ -276,18 +276,15 @@ void SorterHunter::RegisterValidCore()
 	// Concatenate with prefix and postfix and calculate properties
 	Network totalNetwork = symmetric ? symmetricExpansion(N, networkCore) : networkCore;
 	totalNetwork = Concatenate(prefix, Concatenate(totalNetwork, postfix));
-	size_t size = totalNetwork.size();
-	uint32_t depth = ComputeDepth(totalNetwork);
 
 	// Check if this network improves the convex hull
-	if (!convexHull.AddEntry(size, depth)) return;
+	if (!convexHull.AddEntry(totalNetwork)) return;
 
 	// Reduce spam output by excluding neworks worse than bubblesort
-	bool betterThanBubble = (size <= ((N * (N - 1)) / 2));
+	bool betterThanBubble = (totalNetwork.size() <= ((N * (N - 1)) / 2));
 	if (!betterThanBubble && Config::Verbosity() < VerbosityHigh) return;
 
 	// Print metadata and network
-	//PRINT(" {{'N':{},'L':{},'D':{},'sw':'{}','Prefix':{},'Postfix':{},'nw':", N, size, depth, VERSION, prefix.size(), postfix.size());
 	//PrintNetwork(totalNetwork);
 	convexHull.Print();
 }
@@ -295,7 +292,7 @@ void SorterHunter::RegisterValidCore()
 void SorterHunter::UphillStep()
 {
 	// Choose random insertion position and new CE
-	size_t insertPos = GlobalGen() % (networkCore.size() + 1);
+	size_t insertPos = GlobalGen()() % (networkCore.size() + 1);
 	CE newCE = RandomElement(alphabet);
 
 	// If not forcing a valid step, just add the pair straight away

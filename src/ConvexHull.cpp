@@ -4,12 +4,14 @@
 
 void ConvexHull::Clear()
 {
+	std::unique_lock lock{ mu };
 	entries.clear();
 }
 
-bool ConvexHull::AddEntry(uint32_t size, uint32_t depth)
+bool ConvexHull::AddEntry(const Network& network)
 {
-	Entry newEntry{ size, depth };
+	std::unique_lock lock{ mu };
+	Entry newEntry{ network, (uint32_t)network.size(), ComputeDepth(network) };
 
 	// Check if an existing entry already dominates this one
 	for (const Entry& existingEntry : entries)

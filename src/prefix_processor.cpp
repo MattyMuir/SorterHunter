@@ -456,7 +456,7 @@ SortWord createGreedyPrefix(uint8_t ninputs, uint32_t maxpairs, bool use_symmetr
 	{
 		Network ashuf = alphabet;
 		CE best= {0,1};
-		std::shuffle(ashuf.begin(),ashuf.end(), GlobalGen);
+		std::shuffle(ashuf.begin(),ashuf.end(), GlobalGen());
 		SortWord minsize = currentsize;
 
 		ClusterGroup cgbest=cg;

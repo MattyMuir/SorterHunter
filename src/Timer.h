@@ -1,14 +1,7 @@
 #pragma once
 #include <chrono>
 
-// Printing logic
-#ifdef TIMER_NPRINT
-#include <iostream>
-#define PRINT(fmt, ...) std::cout << std::format(fmt, __VA_ARGS__);
-#else
-#include <print>
-#define PRINT(fmt, ...) std::print(fmt, __VA_ARGS__);
-#endif
+#include "print.h"
 
 #define TIMER(name) Timer name
 #define STOP_LOG(name) { name.Stop(); PRINT("{} took: ", #name); name.Log(); }

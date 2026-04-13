@@ -4,7 +4,6 @@
 #include "GlobalRandom.h"
 #include "SorterHunter.h"
 #include "PrefixGenerator.h"
-#define TIMER_NPRINT
 #include "Timer.h"
 
 int PrintUsage()
@@ -54,10 +53,6 @@ int main(int argc, char** argv)
 	// Process config file
 	if (argc != 2) return PrintUsage();
 	if (!ProcessConfig(argv[1])) return -1;
-
-	// Seed global random number generator
-	if (Config::HasKey("RandomSeed"))
-		GlobalGen.seed(Config::GetInt("RandomSeed"));
 
 	// Generate alphabet
 	std::vector<CE> alphabet = BuildAlphabet();

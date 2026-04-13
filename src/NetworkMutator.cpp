@@ -24,7 +24,7 @@ NetworkMutator::NetworkMutator(const std::vector<CE>& alphabet_)
 
 void NetworkMutator::MutateMulti(Network& network, size_t maxMutations)
 {
-	size_t numMutations = 1 + GlobalGen() % maxMutations;
+	size_t numMutations = 1 + GlobalGen()() % maxMutations;
 	for (size_t i = 0; i < numMutations; i++)
 		MutateOnce(network);
 }
@@ -126,7 +126,7 @@ bool NetworkMutator::CrossPairs(Network& network)
 
 	if ((alo == blo) || (alo == bhi) || (ahi == blo) || (ahi == bhi)) return false;
 
-	uint32_t r2 = GlobalGen() % 2;
+	uint32_t r2 = GlobalGen()() % 2;
 	uint8_t x = r2 ? bhi : blo;
 	uint8_t y = r2 ? blo : bhi;
 	network[a].lo = std::min(alo, x);
