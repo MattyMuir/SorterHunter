@@ -262,7 +262,7 @@ void ClusterGroup::preSort(CE p)
  */
 void ClusterGroup::computeOutputs(SinglePatternList &patterns) const
 {
-	const static SinglePatternList *pLists[NMAX];
+	const SinglePatternList *pLists[NMAX];
 	int n_to_combine=0;
 	
 	for (uint32_t k=0;k<ninputs;k++)
@@ -382,9 +382,7 @@ static inline bool hasSmallerMirror(uint8_t ninputs, SortWord w)
 	return w > reversed;
 }
 
-static SortWord all_n_inputs_mask;
-
-static bool isSorted(SortWord w)
+static bool isSorted(SortWord w, SortWord all_n_inputs_mask)
 {
 	w = ~w & all_n_inputs_mask;
 	return (w & (w + 1)) == 0;
@@ -398,11 +396,11 @@ static inline void WriteBit(std::array<uint64_t, 4>& x, size_t pos, uint8_t bit)
 void convertToBitParallel(uint8_t ninputs, const SinglePatternList &singles, bool use_symmetry, BitParallelList &parallels)
 {
 	uint32_t bufferWriteIdx = 0;
-	static std::array<uint64_t, 4> buffer[NMAX]{};
+	std::array<uint64_t, 4> buffer[NMAX]{};
 	parallels.clear();
 
 	// Create a mask with the lowest 'ninputs' bits set
-	all_n_inputs_mask = (ninputs == 64) ? ((SortWord)-1) : ((1ULL << ninputs) - 1);
+	SortWord all_n_inputs_mask = (ninputs == 64) ? ((SortWord)-1) : ((1ULL << ninputs) - 1);
 	
 	for (SortWord w : singles)
 	{
@@ -410,7 +408,7 @@ void convertToBitParallel(uint8_t ninputs, const SinglePatternList &singles, boo
 		if (use_symmetry && hasSmallerMirror(ninputs, w)) continue; 
 		
 		// Already sorted pattern will not be affected by sorting operation - useless as test vector
-		if (isSorted(w)) continue; 
+		if (isSorted(w, all_n_inputs_mask)) continue; 
 		
 		// Take the bits of this sortword, split them up and append one each to the end of the parallel words in 'buffer'
 		for (uint32_t inputIdx = 0; inputIdx < ninputs; inputIdx++)

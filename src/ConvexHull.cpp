@@ -1,6 +1,7 @@
 #include "ConvexHull.h"
 
 #include "print.h"
+#include <ranges>
 
 void ConvexHull::Clear()
 {
@@ -8,10 +9,10 @@ void ConvexHull::Clear()
 	entries.clear();
 }
 
-bool ConvexHull::AddEntry(const Network& network)
+bool ConvexHull::AddEntry(const Network& totalNetwork, const Network& networkCore)
 {
 	std::unique_lock lock{ mu };
-	Entry newEntry{ network, (uint32_t)network.size(), ComputeDepth(network) };
+	Entry newEntry{ totalNetwork, networkCore, (uint32_t)totalNetwork.size(), ComputeDepth(totalNetwork) };
 
 	// Check if an existing entry already dominates this one
 	for (const Entry& existingEntry : entries)
@@ -34,6 +35,13 @@ void ConvexHull::Print() const
 		PRINT("({},{})", entries[i].size, entries[i].depth);
 	}
 	PRINT("]\n");
+}
+
+Network ConvexHull::GetSmallestNetwork() const
+{
+	std::unique_lock lock{ mu };
+	auto it = std::ranges::min_element(entries, {}, [](const Entry& entry) { return entry.size; });
+	return it->networkCore;
 }
 
 bool ConvexHull::EntryDominates(Entry a, Entry b)

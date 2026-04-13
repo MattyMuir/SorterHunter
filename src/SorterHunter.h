@@ -12,7 +12,7 @@ class SorterHunter
 public:
 	SorterHunter(const PrefixGenerator& prefixGenerator_, const Network& postfix_, const std::vector<CE>& alphabet_);
 
-	void Hunt(size_t epochs = 0);
+	void Hunt(size_t maxEpochs = 0);
 
 protected:
 	// Constructor parameters
@@ -26,21 +26,20 @@ protected:
 	const uint32_t maxMutations, escapeRate, restartRate;
 
 	// State
-	size_t epoch = 0;
-	Network prefix;
 	NetworkMutator mutator;
 	ConvexHull convexHull;
-	BitParallelList testVectors;
-	Network networkCore;
+	std::vector<BitParallelList> allTestVectors;
+	std::vector<Network> prefixes, networkCores;
 
-	void PrepareTestVectors();
-	void ProduceInitialSolution();
+	void HuntWorker(size_t threadIdx, size_t maxEpochs);
+
+	BitParallelList PrepareTestVectors(const Network& prefix);
+	void ProduceInitialSolution(size_t threadIdx);
 	static void RunNetwork(const Network& network, BPWord* inputs);
-	std::pair<bool, SortWord> TestNetwork(const Network& network);
-	bool TestNetworkAndBump(const Network& network);
+	std::pair<bool, SortWord> TestNetwork(const Network& network, const BitParallelList& testVectors);
+	bool TestNetworkAndBump(const Network& network, const BitParallelList& testVectors);
 	void BumpVectorPosition(size_t groupIdx, size_t bitIdx);
-	void LogEpoch();
-	void RegisterValidCore();
-	void UphillStep();
-	void Restart();
+	void LogEpoch(size_t threadIdx, size_t epoch);
+	void RegisterValidCore(size_t threadIdx);
+	void UphillStep(Network& networkCore);
 };
