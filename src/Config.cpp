@@ -14,9 +14,9 @@ static const std::unordered_map<std::string, KeyType> allKeys{
 	{ "EscapeRate",						KeyType::Int },
 	{ "ForceValidUphillStep",			KeyType::Int },
 	{ "MaxMutations",					KeyType::Int },
-	{ "WeigthRemovePair",				KeyType::Int },
-	{ "WeigthSwapPairs",				KeyType::Int },
-	{ "WeigthReplacePair",				KeyType::Int },
+	{ "WeightRemovePair",				KeyType::Int },
+	{ "WeightSwapPairs",				KeyType::Int },
+	{ "WeightReplacePair",				KeyType::Int },
 	{ "WeightCrossPairs",				KeyType::Int },
 	{ "WeightSwapIntersectingPairs",	KeyType::Int },
 	{ "WeightReplaceHalfPair",			KeyType::Int },
@@ -57,7 +57,7 @@ void Config::Parse(const std::string& filepath)
 	// Open file
 	std::ifstream file{ filepath };
 	if (!file) throw ParseError{ "Could not open config file" };
-
+	
 	std::string line;
 	while (std::getline(file, line))
 	{
@@ -131,8 +131,11 @@ Network Config::ParseNetwork(const std::string& valueStr)
 	Network network;
 	uint8_t lo, hi;
 	const char* it = valueStr.c_str();
-	while (sscanf_s(it, "(%" SCNu8 ",%" SCNu8 ")", &lo, &hi) == 2)
+	const char* strEnd = it + valueStr.size();
+	while (it < strEnd)
 	{
+		if (sscanf_s(it, "(%" SCNu8 ",%" SCNu8 ")", &lo, &hi) != 2)
+			throw ParseError{ "Invalid network!" };
 		network.push_back({ lo, hi });
 		it = strchr(it, ')') + 2;
 	}

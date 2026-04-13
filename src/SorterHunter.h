@@ -12,7 +12,7 @@ class SorterHunter
 public:
 	SorterHunter(const PrefixGenerator& prefixGenerator_, const Network& postfix_, const std::vector<CE>& alphabet_);
 
-	void Hunt();
+	void Hunt(size_t epochs = 0);
 
 protected:
 	// Constructor parameters
@@ -21,9 +21,9 @@ protected:
 	const std::vector<CE> alphabet;
 
 	// Config parameters
-	uint8_t N;
-	bool symmetric;
-	uint32_t maxMutations, escapeRate, restartRate;
+	const uint8_t N;
+	const bool symmetric;
+	const uint32_t maxMutations, escapeRate, restartRate;
 
 	// State
 	size_t epoch = 0;

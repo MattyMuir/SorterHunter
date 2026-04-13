@@ -26,9 +26,10 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <algorithm>
 #include <cstdio>
 #include <cassert>
+#include <algorithm>
+#include <array>
 
 #include "utils.h"
 #include "prefix_processor.h"
@@ -389,10 +390,15 @@ static bool isSorted(SortWord w)
 	return (w & (w + 1)) == 0;
 }
 
+static inline void WriteBit(std::array<uint64_t, 4>& x, size_t pos, uint8_t bit)
+{
+	x[pos / 64] |= bit << (pos % 64);
+}
+
 void convertToBitParallel(uint8_t ninputs, const SinglePatternList &singles, bool use_symmetry, BitParallelList &parallels)
 {
 	uint32_t bufferWriteIdx = 0;
-	static BPWord buffer[NMAX];
+	static std::array<uint64_t, 4> buffer[NMAX]{};
 	parallels.clear();
 
 	// Create a mask with the lowest 'ninputs' bits set
@@ -409,8 +415,7 @@ void convertToBitParallel(uint8_t ninputs, const SinglePatternList &singles, boo
 		// Take the bits of this sortword, split them up and append one each to the end of the parallel words in 'buffer'
 		for (uint32_t inputIdx = 0; inputIdx < ninputs; inputIdx++)
 		{
-			buffer[inputIdx] <<= 1;
-			buffer[inputIdx] |= (w & 1);
+			WriteBit(buffer[inputIdx], bufferWriteIdx, (w & 1));
 			w >>= 1;
 		}
 		bufferWriteIdx++;
@@ -418,10 +423,10 @@ void convertToBitParallel(uint8_t ninputs, const SinglePatternList &singles, boo
 		// Check if this buffer is full
 		if (bufferWriteIdx >= PARWORDSIZE)
 		{
-			for (uint32_t b = 0; b < ninputs; b++)
+			for (uint32_t inputIdx = 0; inputIdx < ninputs; inputIdx++)
 			{
-				parallels.push_back(buffer[b]);
-				buffer[b] = 0;
+				parallels.push_back(_mm256_loadu_si256((__m256i*)buffer[inputIdx].data()));
+				buffer[inputIdx] = {};
 			}
 			bufferWriteIdx = 0;
 		}	
@@ -429,8 +434,8 @@ void convertToBitParallel(uint8_t ninputs, const SinglePatternList &singles, boo
 
 	// If the current buffer has any remaining sortwords, add them
 	if (bufferWriteIdx > 0)
-		for (uint32_t b=0;b<ninputs;b++)
-			parallels.push_back(buffer[b]);
+		for (uint32_t inputIdx = 0; inputIdx < ninputs; inputIdx++)
+			parallels.push_back(_mm256_loadu_si256((__m256i*)buffer[inputIdx].data()));
 
 	if (Config::Verbosity() >= VerbosityDebug)
 		PRINT("Debug: Pattern conversion: {} single inputs -> {} parallel words ({} * {}) (symmetry:{})\n", singles.size(), parallels.size(), ninputs, parallels.size()/ninputs, use_symmetry);

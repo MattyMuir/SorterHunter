@@ -6,9 +6,9 @@ NetworkMutator::NetworkMutator(const std::vector<CE>& alphabet_)
 	: alphabet(alphabet_)
 {
 	uint32_t mutationWeights[NMUTATIONTYPES];
-	mutationWeights[MutationRemovePair]				= Config::GetInt("WeigthRemovePair", 1);
-	mutationWeights[MutationSwapPairs]				= Config::GetInt("WeigthSwapPairs", 1);
-	mutationWeights[MutationReplacePair]			= Config::GetInt("WeigthReplacePair", 1);
+	mutationWeights[MutationRemovePair]				= Config::GetInt("WeightRemovePair", 1);
+	mutationWeights[MutationSwapPairs]				= Config::GetInt("WeightSwapPairs", 1);
+	mutationWeights[MutationReplacePair]			= Config::GetInt("WeightReplacePair", 1);
 	mutationWeights[MutationCrossPairs]				= Config::GetInt("WeightCrossPairs", 1);
 	mutationWeights[MutationSwapIntersectingPairs]	= Config::GetInt("WeightSwapIntersectingPairs", 1);
 	mutationWeights[MutationReplaceHalfPair]		= Config::GetInt("WeightReplaceHalfPair", 1);

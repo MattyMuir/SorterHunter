@@ -19,16 +19,16 @@ SorterHunter::SorterHunter(const PrefixGenerator& prefixGenerator_, const Networ
 	escapeRate(Config::GetInt("EscapeRate", 0)),
 	restartRate(Config::GetInt("RestartRate", 0)),
 	mutator(alphabet_)
-{}
-
-void SorterHunter::Hunt()
 {
 	// Generate the prefix
 	prefix = prefixGenerator.Generate();
 
 	// Prepare the test vectors based on the prefix
 	PrepareTestVectors();
+}
 
+void SorterHunter::Hunt(size_t epochs)
+{
 	// Outer loop - restart from here if restart is triggered
 	for (;;)
 	{
@@ -38,10 +38,13 @@ void SorterHunter::Hunt()
 
 		// Build an initial solution naively
 		ProduceInitialSolution();
+		RegisterValidCore();
 
 		// Program never ends, keep trying to improve, we may restart in the outer loop however
+		PRINT("{:<50}\n", "Hunting...");
 		for (;; epoch++)
 		{
+			if (epochs && epoch > epochs) return;
 			if (Config::Verbosity() >= VerbosityDebug) LogEpoch();
 
 			// Mutate network
@@ -75,6 +78,8 @@ void SorterHunter::Hunt()
 
 void SorterHunter::PrepareTestVectors()
 {
+	PRINT("{:<50}\r", "Preparing test vectors...");
+
 	// Compute all possible outputs from the prefix
 	SinglePatternList singles;
 	computePrefixOutputs(N, prefix, singles);
@@ -88,6 +93,8 @@ void SorterHunter::PrepareTestVectors()
 
 void SorterHunter::ProduceInitialSolution()
 {
+	PRINT("{:<50}\r", "Producing initial solution...");
+
 	// Produce initial solution, simply by adding random pairs until we found a valid network. In case no postfix is present, we demand that the added pair
 	// fixes at least one of the output inversions in the first detected error output vector, so it does at least some useful work to help sorting the outputs.
 	// In case there is a postfix network, this check is not implemented.
@@ -129,9 +136,27 @@ void SorterHunter::RunNetwork(const Network& network, BPWord* inputs)
 	for (auto [i, j] : network)
 	{
 		BPWord iold = inputs[i];
-		inputs[i] &= inputs[j];
-		inputs[j] |= iold;
+		inputs[i] = _mm256_and_si256(inputs[i], inputs[j]);
+		inputs[j] = _mm256_or_si256(inputs[j], iold);
 	}
+}
+
+static inline uint64_t CountrZero(__m256i x)
+{
+	__m256i zerowords = _mm256_cmpeq_epi32(x, _mm256_setzero_si256());
+	uint32_t zeromask = ~_mm256_movemask_ps(_mm256_castsi256_ps(zerowords));
+	uint32_t elems[8];
+	_mm256_storeu_si256((__m256i*)elems, x);
+
+	uint32_t wordIdx = std::countr_zero(zeromask);
+	return wordIdx * 32 + std::countr_zero(elems[wordIdx]);
+}
+
+static inline uint64_t ReadBit(__m256i x, size_t pos)
+{
+	uint64_t xMem[4];
+	_mm256_storeu_si256((__m256i*)xMem, x);
+	return (xMem[pos / 64] >> (pos % 64)) & 1;
 }
 
 std::pair<bool, SortWord> SorterHunter::TestNetwork(const Network& network)
@@ -146,20 +171,20 @@ std::pair<bool, SortWord> SorterHunter::TestNetwork(const Network& network)
 		RunNetwork(network, currentGroup);
 
 		// Scan for forbidden 1 -> 0 transition
-		BPWord accum = 0;
+		BPWord accum = _mm256_setzero_si256();
 		for (size_t k = 0; k < (N - 1u); k++)
-			accum |= currentGroup[k] & ~currentGroup[k + 1];
+			accum = _mm256_or_si256(accum, _mm256_andnot_si256(currentGroup[k + 1], currentGroup[k]));
 
 		// If found, determine which input within the group was incorrectly sorted
-		if (accum)
+		if (!_mm256_testz_si256(accum, accum))
 		{
-			size_t bitIdx = std::countr_zero(accum);
+			size_t bitIdx = CountrZero(accum);
 			
 			// Convert failing output into serial word
 			SortWord problemOutput = 0;
 			for (uint8_t inputIdx = 0; inputIdx < N; inputIdx++)
 			{
-				uint64_t bit = (currentGroup[inputIdx] >> bitIdx) & 1;
+				uint64_t bit = ReadBit(currentGroup[inputIdx], bitIdx);
 				problemOutput |= bit << inputIdx;
 			}
 
@@ -182,15 +207,15 @@ bool SorterHunter::TestNetworkAndBump(const Network& network)
 		RunNetwork(network, currentGroup);
 
 		// Scan for forbidden 1 -> 0 transition
-		BPWord accum = 0;
+		BPWord accum = _mm256_setzero_si256();
 		for (size_t k = 0; k < (N - 1u); k++)
-			accum |= currentGroup[k] & ~currentGroup[k + 1];
+			accum = _mm256_or_si256(accum, _mm256_andnot_si256(currentGroup[k + 1], currentGroup[k]));
 
 		// If found, determine which input within the group was incorrectly sorted
-		if (accum)
+		if (!_mm256_testz_si256(accum, accum))
 		{
-			size_t bitIdx = std::countr_zero(accum);
-			BumpVectorPosition(groupIdx, bitIdx);
+			size_t bitIdx = CountrZero(accum);
+			//BumpVectorPosition(groupIdx, bitIdx);
 			return false;
 		}
 	}
@@ -200,6 +225,7 @@ bool SorterHunter::TestNetworkAndBump(const Network& network)
 
 void SorterHunter::BumpVectorPosition(size_t groupIdx, size_t bitIdx)
 {
+	/*
 	if (groupIdx > 1)
 	{
 		// Move up failing vector group about 1/8 the distance to the front
@@ -237,11 +263,12 @@ void SorterHunter::BumpVectorPosition(size_t groupIdx, size_t bitIdx)
 			testVectors[k] = (old & ~m0 & ~m1) | ((old & m1) >> 1) | ((old & m0) << 1);
 		}
 	}
+	*/
 }
 
 void SorterHunter::LogEpoch()
 {
-	//if (epoch % 100000 == 0) PRINT("Epoch: {}\n", epoch);
+	if (epoch % 10000 == 0) PRINT("Epoch: {}\r", epoch);
 }
 
 void SorterHunter::RegisterValidCore()
@@ -260,8 +287,8 @@ void SorterHunter::RegisterValidCore()
 	if (!betterThanBubble && Config::Verbosity() < VerbosityHigh) return;
 
 	// Print metadata and network
-	PRINT(" {{'N':{},'L':{},'D':{},'sw':'{}','Prefix':{},'Postfix':{},'nw':", N, size, depth, VERSION, prefix.size(), postfix.size());
-	PrintNetwork(totalNetwork);
+	//PRINT(" {{'N':{},'L':{},'D':{},'sw':'{}','Prefix':{},'Postfix':{},'nw':", N, size, depth, VERSION, prefix.size(), postfix.size());
+	//PrintNetwork(totalNetwork);
 	convexHull.Print();
 }
 
@@ -298,6 +325,6 @@ void SorterHunter::UphillStep()
 
 void SorterHunter::Restart()
 {
-	if (Config::Verbosity() >= VerbosityHigh) PRINT("Restart.\n");
+	if (Config::Verbosity() >= VerbosityHigh) PRINT("Restart.\r");
 	prefix = prefixGenerator.Generate();
 }

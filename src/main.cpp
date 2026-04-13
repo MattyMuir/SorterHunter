@@ -4,6 +4,8 @@
 #include "GlobalRandom.h"
 #include "SorterHunter.h"
 #include "PrefixGenerator.h"
+#define TIMER_NPRINT
+#include "Timer.h"
 
 int PrintUsage()
 {
@@ -63,5 +65,7 @@ int main(int argc, char** argv)
 	// Hunt for efficient sorting networks
 	PrefixGenerator prefixGenerator{ (PrefixType)Config::GetInt("PrefixType", 0), alphabet };
 	SorterHunter hunter{ prefixGenerator, Config::GetNetwork("Postfix", Network{}), alphabet };
+	TIMER(t);
 	hunter.Hunt();
+	STOP_LOG(t);
 }

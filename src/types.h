@@ -27,15 +27,15 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <stdint.h>
+#include <cstdint>
 #include <vector>
 
+#include <immintrin.h>
+
 #define NMAX (64)
-#define PARWORDSIZE (64)
-
-
+#define PARWORDSIZE (256)
 
 using SortWord = uint64_t;
-using BPWord = uint64_t;							/// Bit-parallel operation word, needs to contain at least PARWORDSIZE bits 
+using BPWord = __m256i;							/// Bit-parallel operation word, needs to contain at least PARWORDSIZE bits 
 using SinglePatternList = std::vector<SortWord>;
 using BitParallelList = std::vector<BPWord>;

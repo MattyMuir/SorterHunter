@@ -14,6 +14,9 @@ PrefixGenerator::PrefixGenerator(PrefixType type_, const std::vector<CE>& alphab
 
 Network PrefixGenerator::Generate() const
 {
+	if (Config::Verbosity() >= VerbosityModerate)
+		PRINT("{:<50}\r", "Generating prefix...");
+
 	switch (type)
 	{
 	case PrefixNone: return {};
