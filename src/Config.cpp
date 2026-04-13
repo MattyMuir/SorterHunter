@@ -22,7 +22,6 @@ static const std::unordered_map<std::string, KeyType> allKeys{
 	{ "WeightReplaceHalfPair",			KeyType::Int },
 	{ "PrefixType",						KeyType::Int },
 	{ "GreedyPrefixSize",				KeyType::Int },
-	{ "RestartRate",					KeyType::Int },
 	{ "Verbosity",						KeyType::Int },
 
 	{ "FixedPrefix",					KeyType::Network },

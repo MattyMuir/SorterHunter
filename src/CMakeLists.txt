@@ -3,9 +3,9 @@
 # === Create Executable ===
 add_executable(SorterHunter   "types.h" "utils.h" "prefix_processor.h"  "utils.cpp" "prefix_processor.cpp" "print.h" "ConvexHull.h" "ConvexHull.cpp" "Config.h" "Config.cpp" "SorterHunter.h" "SorterHunter.cpp" "NetworkMutator.h" "NetworkMutator.cpp" "GlobalRandom.h"  "main.cpp" "version.h" "Network.h" "Network.cpp" "PrefixGenerator.h" "PrefixGenerator.cpp" "Timer.h"   "GlobalRandom.cpp")
 
-if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND UNIX)
     target_compile_options(SorterHunter PRIVATE -stdlib=libc++)
-    target_link_options(SorterHunter PRIVATE -stdlib=libc++ )
+    target_link_options(SorterHunter PRIVATE -stdlib=libc++)
 endif()
 
 find_package(Threads REQUIRED)

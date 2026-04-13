@@ -28,18 +28,19 @@ protected:
 	// State
 	NetworkMutator mutator;
 	ConvexHull convexHull;
-	std::vector<BitParallelList> allTestVectors;
-	std::vector<Network> prefixes, networkCores;
+	BitParallelList testVectors;
+	Network prefix;
+	std::vector<Network>networkCores;
 
 	void HuntWorker(size_t threadIdx, size_t maxEpochs);
 
-	BitParallelList PrepareTestVectors(const Network& prefix);
-	void ProduceInitialSolution(size_t threadIdx);
+	void PrepareTestVectors();
+	void ProduceInitialSolution(Network& networkCore);
 	static void RunNetwork(const Network& network, BPWord* inputs);
-	std::pair<bool, SortWord> TestNetwork(const Network& network, const BitParallelList& testVectors);
-	bool TestNetworkAndBump(const Network& network, const BitParallelList& testVectors);
+	std::pair<bool, SortWord> TestNetwork(const Network& network);
+	bool TestNetworkAndBump(const Network& network);
 	void BumpVectorPosition(size_t groupIdx, size_t bitIdx);
 	void LogEpoch(size_t threadIdx, size_t epoch);
-	void RegisterValidCore(size_t threadIdx);
+	void RegisterValidCore(Network& networkCore);
 	void UphillStep(Network& networkCore);
 };

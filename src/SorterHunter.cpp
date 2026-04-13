@@ -24,11 +24,15 @@ SorterHunter::SorterHunter(const PrefixGenerator& prefixGenerator_, const Networ
 
 void SorterHunter::Hunt(size_t maxEpochs)
 {
-	size_t numThreads = std::thread::hardware_concurrency() - 1;
+	// Generate a prefix
+	prefix = prefixGenerator.Generate();
 
-	allTestVectors.resize(numThreads);
-	prefixes.resize(numThreads);
-	networkCores.resize(numThreads);
+	// Prepare the test vectors based on the prefix
+	PrepareTestVectors();
+
+	// === Launch worker threads ===
+	size_t numThreads = std::thread::hardware_concurrency() - 1;
+	networkCores.resize(numThreads, Network{});
 
 	std::vector<std::thread> workers;
 	workers.reserve(numThreads);
@@ -40,62 +44,45 @@ void SorterHunter::Hunt(size_t maxEpochs)
 
 void SorterHunter::HuntWorker(size_t threadIdx, size_t maxEpochs)
 {
-	// Outer loop - restart from here if restart is triggered
-	size_t epoch = 0;
-	for (;;)
+	Network& networkCore = networkCores[threadIdx];
+
+	// Load the provided initial network
+	if (Config::HasKey("InitialNetwork"))
+		networkCore = Config::GetNetwork("InitialNetwork");
+
+	// Build an initial solution naively
+	ProduceInitialSolution(networkCore);
+	RegisterValidCore(networkCore);
+
+	// Program never ends, keep trying to improve, we may restart in the outer loop however
+	if (Config::Verbosity() >= VerbosityHigh) PRINT("{:<50}\n", "Hunting...");
+	for (size_t epoch = 0;!maxEpochs || epoch < maxEpochs; epoch++)
 	{
-		// Generate a prefix
-		prefixes[threadIdx] = prefixGenerator.Generate();
+		if (Config::Verbosity() >= VerbosityDebug) LogEpoch(threadIdx, epoch);
+		//if ((epoch + 1) % 1000 == 0) networkCore = convexHull.GetSmallestNetwork();
 
-		// Prepare the test vectors based on the prefix
-		allTestVectors[threadIdx] = PrepareTestVectors(prefixes[threadIdx]);
+		// Mutate network
+		Network mutatedCore{ networkCore };
+		mutator.MutateMulti(mutatedCore, maxMutations);
 
-		// Load the provided initial network
-		if (Config::HasKey("InitialNetwork"))
-			networkCores[threadIdx] = Config::GetNetwork("InitialNetwork");
+		// Symmetrically expand new network and add postfix
+		Network mutatedWithPostfix = symmetric ? symmetricExpansion(N, mutatedCore) : mutatedCore;
+		mutatedWithPostfix = Concatenate(mutatedWithPostfix, postfix);
 
-		// Build an initial solution naively
-		ProduceInitialSolution(threadIdx);
-		RegisterValidCore(threadIdx);
-
-		// Program never ends, keep trying to improve, we may restart in the outer loop however
-		if (Config::Verbosity() >= VerbosityHigh) PRINT("{:<50}\n", "Hunting...");
-		for (;; epoch++)
+		// Test if this network is a valid sorter
+		if (TestNetworkAndBump(mutatedWithPostfix))
 		{
-			if (maxEpochs && epoch > maxEpochs) return;
-			if (Config::Verbosity() >= VerbosityDebug) LogEpoch(threadIdx, epoch);
-			//if ((epoch + 1) % 1000 == 0) networkCores[threadIdx] = convexHull.GetSmallestNetwork();
-
-			// Mutate network
-			Network mutatedCore{ networkCores[threadIdx] };
-			mutator.MutateMulti(mutatedCore, maxMutations);
-
-			// Symmetrically expand new network and add postfix
-			Network mutatedWithPostfix = symmetric ? symmetricExpansion(N, mutatedCore) : mutatedCore;
-			mutatedWithPostfix = Concatenate(mutatedWithPostfix, postfix);
-
-			// Test if this network is a valid sorter
-			if (TestNetworkAndBump(mutatedWithPostfix, allTestVectors[threadIdx]))
-			{
-				networkCores[threadIdx] = mutatedCore;
-				RegisterValidCore(threadIdx);
-			}
-
-			// With low probability, add another random pair at a random place to attempt to escape from local minima
-			if (escapeRate > 0 && (GlobalGen()() % escapeRate) == 0)
-				UphillStep(networkCores[threadIdx]);
-
-			// With low probability, restart using outer loop
-			if (restartRate > 0 && (GlobalGen()() % restartRate) == 0)
-			{
-				if (Config::Verbosity() >= VerbosityHigh) PRINT("Restart.\r");
-				break;
-			}
+			networkCore = mutatedCore;
+			RegisterValidCore(networkCore);
 		}
+
+		// With low probability, add another random pair at a random place to attempt to escape from local minima
+		if (escapeRate > 0 && (GlobalGen()() % escapeRate) == 0)
+			UphillStep(networkCore);
 	}
 }
 
-BitParallelList SorterHunter::PrepareTestVectors(const Network& prefix)
+void SorterHunter::PrepareTestVectors()
 {
 	if (Config::Verbosity() >= VerbosityHigh) PRINT("{:<50}\r", "Preparing test vectors...");
 
@@ -107,15 +94,12 @@ BitParallelList SorterHunter::PrepareTestVectors(const Network& prefix)
 	std::shuffle(singles.begin(), singles.end(), GlobalGen());
 
 	// Pack the possible prefix outputs into a bit-parallel list
-	BitParallelList testVectors;
 	convertToBitParallel(N, singles, Config::GetInt("Symmetric"), testVectors);
-	return testVectors;
 }
 
-void SorterHunter::ProduceInitialSolution(size_t threadIdx)
+void SorterHunter::ProduceInitialSolution(Network& networkCore)
 {
 	if (Config::Verbosity() >= VerbosityHigh) PRINT("{:<50}\r", "Producing initial solution...");
-	Network& networkCore = networkCores[threadIdx];
 
 	// Produce initial solution, simply by adding random pairs until we found a valid network. In case no postfix is present, we demand that the added pair
 	// fixes at least one of the output inversions in the first detected error output vector, so it does at least some useful work to help sorting the outputs.
@@ -127,7 +111,7 @@ void SorterHunter::ProduceInitialSolution(size_t threadIdx)
 		se = Concatenate(se, postfix);
 
 		// Test the network
-		auto [networkIsValid, problemInput] = TestNetwork(se, allTestVectors[threadIdx]);
+		auto [networkIsValid, problemInput] = TestNetwork(se);
 		if (networkIsValid) break;
 
 		if (!postfix.empty()) networkCore.push_back(RandomElement(alphabet));
@@ -181,7 +165,7 @@ static inline uint64_t ReadBit(__m256i x, size_t pos)
 	return (xMem[pos / 64] >> (pos % 64)) & 1;
 }
 
-std::pair<bool, SortWord> SorterHunter::TestNetwork(const Network& network, const BitParallelList& testVectors)
+std::pair<bool, SortWord> SorterHunter::TestNetwork(const Network& network)
 {
 	for (size_t groupIdx = 0; groupIdx < testVectors.size() / N; groupIdx++)
 	{
@@ -217,7 +201,7 @@ std::pair<bool, SortWord> SorterHunter::TestNetwork(const Network& network, cons
 	return { true, 0 };
 }
 
-bool SorterHunter::TestNetworkAndBump(const Network& network, const BitParallelList& testVectors)
+bool SorterHunter::TestNetworkAndBump(const Network& network)
 {
 	for (size_t groupIdx = 0; groupIdx < testVectors.size() / N; groupIdx++)
 	{
@@ -293,14 +277,14 @@ void SorterHunter::LogEpoch(size_t threadIdx, size_t epoch)
 	//if (epoch % 10000 == 0) PRINT("Epoch: {}\r", epoch);
 }
 
-void SorterHunter::RegisterValidCore(size_t threadIdx)
+void SorterHunter::RegisterValidCore(Network& networkCore)
 {
 	// Concatenate with prefix and postfix and calculate properties
-	Network totalNetwork = symmetric ? symmetricExpansion(N, networkCores[threadIdx]) : networkCores[threadIdx];
-	totalNetwork = Concatenate(prefixes[threadIdx], Concatenate(totalNetwork, postfix));
+	Network totalNetwork = symmetric ? symmetricExpansion(N, networkCore) : networkCore;
+	totalNetwork = Concatenate(prefix, Concatenate(totalNetwork, postfix));
 
 	// Check if this network improves the convex hull
-	if (!convexHull.AddEntry(totalNetwork, networkCores[threadIdx])) return;
+	if (!convexHull.AddEntry(totalNetwork, networkCore)) return;
 
 	// Reduce spam output by excluding neworks worse than bubblesort
 	bool betterThanBubble = (totalNetwork.size() <= ((N * (N - 1)) / 2));
