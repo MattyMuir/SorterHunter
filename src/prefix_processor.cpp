@@ -363,7 +363,11 @@ void computePrefixOutputs(uint8_t ninputs, const Network &prefix, SinglePatternL
 
 static inline uint64_t ReverseBits(uint64_t x)
 {
+#if __cpp_lib_byteswap >= 202110L
 	x = std::byteswap(x);
+#else
+	x = __builtin_bswap64(x);
+#endif
 	x = ((x >> 1) & 0x5555555555555555ULL) | ((x & 0x5555555555555555ULL) << 1);
 	x = ((x >> 2) & 0x3333333333333333ULL) | ((x & 0x3333333333333333ULL) << 2);
 	x = ((x >> 4) & 0x0F0F0F0F0F0F0F0FULL) | ((x & 0x0F0F0F0F0F0F0F0FULL) << 4);

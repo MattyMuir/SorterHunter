@@ -2,6 +2,7 @@
 
 #include <bit>
 #include <thread>
+#include <algorithm>
 
 #include "version.h"
 #include "print.h"
@@ -58,7 +59,7 @@ void SorterHunter::HuntWorker(size_t threadIdx, size_t maxEpochs)
 		RegisterValidCore(threadIdx);
 
 		// Program never ends, keep trying to improve, we may restart in the outer loop however
-		PRINT("{:<50}\n", "Hunting...");
+		if (Config::Verbosity() >= VerbosityHigh) PRINT("{:<50}\n", "Hunting...");
 		for (;; epoch++)
 		{
 			if (maxEpochs && epoch > maxEpochs) return;
@@ -96,7 +97,7 @@ void SorterHunter::HuntWorker(size_t threadIdx, size_t maxEpochs)
 
 BitParallelList SorterHunter::PrepareTestVectors(const Network& prefix)
 {
-	PRINT("{:<50}\r", "Preparing test vectors...");
+	if (Config::Verbosity() >= VerbosityHigh) PRINT("{:<50}\r", "Preparing test vectors...");
 
 	// Compute all possible outputs from the prefix
 	SinglePatternList singles;
@@ -113,7 +114,7 @@ BitParallelList SorterHunter::PrepareTestVectors(const Network& prefix)
 
 void SorterHunter::ProduceInitialSolution(size_t threadIdx)
 {
-	PRINT("{:<50}\r", "Producing initial solution...");
+	if (Config::Verbosity() >= VerbosityHigh) PRINT("{:<50}\r", "Producing initial solution...");
 	Network& networkCore = networkCores[threadIdx];
 
 	// Produce initial solution, simply by adding random pairs until we found a valid network. In case no postfix is present, we demand that the added pair

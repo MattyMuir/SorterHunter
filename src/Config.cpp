@@ -134,7 +134,7 @@ Network Config::ParseNetwork(const std::string& valueStr)
 	const char* strEnd = it + valueStr.size();
 	while (it < strEnd)
 	{
-		if (sscanf_s(it, "(%" SCNu8 ",%" SCNu8 ")", &lo, &hi) != 2)
+		if (sscanf(it, "(%" SCNu8 ",%" SCNu8 ")", &lo, &hi) != 2)
 			throw ParseError{ "Invalid network!" };
 		network.push_back({ lo, hi });
 		it = strchr(it, ')') + 2;

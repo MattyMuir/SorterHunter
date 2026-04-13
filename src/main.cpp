@@ -50,6 +50,7 @@ std::vector<CE> BuildAlphabet()
 
 int main(int argc, char** argv)
 {
+	PRINT("Hello");
 	// Process config file
 	if (argc != 2) return PrintUsage();
 	if (!ProcessConfig(argv[1])) return -1;

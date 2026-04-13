@@ -1,5 +1,7 @@
 #include "GlobalRandom.h"
 
+#include <atomic>
+
 #include "Config.h"
 
 std::atomic<size_t> threadIdx = 0;

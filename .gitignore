@@ -1,3 +1,5 @@
 /.vs
 /out
 /profiling
+/build
+/runs

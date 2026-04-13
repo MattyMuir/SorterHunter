@@ -2,4 +2,4 @@
 #include <iostream>
 #include <format>
 
-#define PRINT(...) std::cout << std::format(__VA_ARGS__)
+#define PRINT(...) std::cout << std::format(__VA_ARGS__) << std::flush
