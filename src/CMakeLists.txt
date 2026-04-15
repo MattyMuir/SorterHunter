@@ -1,7 +1,7 @@
 ﻿# EXECUTABLE PROJECT - SorterHunter
 
 # === Create Executable ===
-add_executable(SorterHunter   "types.h" "utils.h" "prefix_processor.h"  "utils.cpp" "prefix_processor.cpp" "print.h" "ConvexHull.h" "ConvexHull.cpp" "Config.h" "Config.cpp" "SorterHunter.h" "SorterHunter.cpp" "NetworkMutator.h" "NetworkMutator.cpp" "GlobalRandom.h"  "main.cpp" "version.h" "Network.h" "Network.cpp" "PrefixGenerator.h" "PrefixGenerator.cpp" "Timer.h"   "GlobalRandom.cpp")
+add_executable(SorterHunter   "types.h" "utils.h" "prefix_processor.h"  "utils.cpp" "prefix_processor.cpp" "print.h" "ConvexHull.h" "ConvexHull.cpp" "Config.h" "Config.cpp" "SorterHunter.h" "SorterHunter.cpp" "NetworkMutator.h" "NetworkMutator.cpp" "GlobalRandom.h"  "main.cpp" "version.h" "Network.h" "Network.cpp" "PrefixGenerator.h" "PrefixGenerator.cpp" "Timer.h"   "GlobalRandom.cpp" "rendering.h" "rendering.cpp")
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND UNIX)
     target_compile_options(SorterHunter PRIVATE -stdlib=libc++)
@@ -9,7 +9,8 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND UNIX)
 endif()
 
 find_package(Threads REQUIRED)
-target_link_libraries(SorterHunter PRIVATE Threads::Threads)
+find_package(raylib REQUIRED)
+target_link_libraries(SorterHunter PRIVATE Threads::Threads raylib winmm)
 
 # === Feature Enables ===
 if (SH_MSVC_STATIC_RUNTIME)

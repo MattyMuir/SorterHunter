@@ -22,7 +22,7 @@ SorterHunter::SorterHunter(const PrefixGenerator& prefixGenerator_, const Networ
 	restartRate(Config::GetInt("RestartRate", 0)),
 	mutator(alphabet_) {}
 
-void SorterHunter::Hunt(size_t maxEpochs)
+void SorterHunter::StartHunting(size_t maxEpochs)
 {
 	// Generate a prefix
 	prefix = prefixGenerator.Generate();
@@ -34,12 +34,25 @@ void SorterHunter::Hunt(size_t maxEpochs)
 	size_t numThreads = std::thread::hardware_concurrency() - 1;
 	networkCores.resize(numThreads, Network{});
 
-	std::vector<std::thread> workers;
 	workers.reserve(numThreads);
 	for (size_t threadIdx = 0; threadIdx < numThreads; threadIdx++)
 		workers.emplace_back([this, threadIdx, maxEpochs]() { return this->HuntWorker(threadIdx, maxEpochs); });
+}
 
+void SorterHunter::StopHunting()
+{
+	shouldStop = true;
 	for (auto& worker : workers) worker.join();
+}
+
+bool SorterHunter::HasFoundNetwork() const
+{
+	return !convexHull.IsEmpty();
+}
+
+Network SorterHunter::GetSmallestNetwork() const
+{
+	return convexHull.GetSmallestNetwork();
 }
 
 void SorterHunter::HuntWorker(size_t threadIdx, size_t maxEpochs)
@@ -48,7 +61,7 @@ void SorterHunter::HuntWorker(size_t threadIdx, size_t maxEpochs)
 
 	// Load the provided initial network
 	if (Config::HasKey("InitialNetwork"))
-		networkCore = Config::GetNetwork("InitialNetwork");
+		networkCore = SanitizeNetwork(Config::GetNetwork("InitialNetwork"));
 
 	// Build an initial solution naively
 	ProduceInitialSolution(networkCore);
@@ -58,8 +71,8 @@ void SorterHunter::HuntWorker(size_t threadIdx, size_t maxEpochs)
 	if (Config::Verbosity() >= VerbosityHigh) PRINT("{:<50}\n", "Hunting...");
 	for (size_t epoch = 0;!maxEpochs || epoch < maxEpochs; epoch++)
 	{
+		if (shouldStop) break;
 		if (Config::Verbosity() >= VerbosityDebug) LogEpoch(threadIdx, epoch);
-		//if ((epoch + 1) % 1000 == 0) networkCore = convexHull.GetSmallestNetwork();
 
 		// Mutate network
 		Network mutatedCore{ networkCore };
@@ -291,7 +304,7 @@ void SorterHunter::RegisterValidCore(Network& networkCore)
 	if (!betterThanBubble && Config::Verbosity() < VerbosityHigh) return;
 
 	// Print metadata and network
-	//PrintNetwork(totalNetwork);
+	PrintNetwork(totalNetwork);
 	convexHull.Print();
 }
 
@@ -324,4 +337,20 @@ void SorterHunter::UphillStep(Network& networkCore)
 	// Otherwise, add a duplicate of the pair already at this position
 	if (inLastLayer) networkCore.insert(networkCore.begin() + insertPos, newCE);
 	else networkCore.insert(networkCore.begin() + insertPos, networkCore[insertPos]);
+}
+
+Network SorterHunter::SanitizeNetwork(const Network network)
+{
+	Network ret{ network };
+	std::erase_if(ret, [this](CE ce)
+	{
+		if (ce.lo >= N || ce.hi >= N) return true;
+		if (ce.lo >= ce.hi) return true;
+
+		uint8_t loSym = N - 1 - ce.hi;
+		uint8_t hiSym = N - 1 - ce.lo;
+		CE ceSym{ loSym, hiSym };
+		return ceSym < ce && symmetric;
+	});
+	return ret;
 }

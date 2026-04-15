@@ -1,7 +1,8 @@
 #include "ConvexHull.h"
 
-#include "print.h"
 #include <ranges>
+
+#include "print.h"
 
 void ConvexHull::Clear()
 {
@@ -37,11 +38,16 @@ void ConvexHull::Print() const
 	PRINT("]\n");
 }
 
+bool ConvexHull::IsEmpty() const
+{
+	return entries.empty();
+}
+
 Network ConvexHull::GetSmallestNetwork() const
 {
 	std::unique_lock lock{ mu };
 	auto it = std::ranges::min_element(entries, {}, [](const Entry& entry) { return entry.size; });
-	return it->networkCore;
+	return it->totalNetwork;
 }
 
 bool ConvexHull::EntryDominates(Entry a, Entry b)

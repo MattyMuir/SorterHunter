@@ -1,3 +1,5 @@
+#include <raylib.h>
+
 #include "version.h"
 #include "print.h"
 #include "Config.h"
@@ -5,6 +7,7 @@
 #include "SorterHunter.h"
 #include "PrefixGenerator.h"
 #include "Timer.h"
+#include "rendering.h"
 
 int PrintUsage()
 {
@@ -50,7 +53,6 @@ std::vector<CE> BuildAlphabet()
 
 int main(int argc, char** argv)
 {
-	PRINT("Hello");
 	// Process config file
 	if (argc != 2) return PrintUsage();
 	if (!ProcessConfig(argv[1])) return -1;
@@ -61,7 +63,24 @@ int main(int argc, char** argv)
 	// Hunt for efficient sorting networks
 	PrefixGenerator prefixGenerator{ (PrefixType)Config::GetInt("PrefixType", 0), alphabet };
 	SorterHunter hunter{ prefixGenerator, Config::GetNetwork("Postfix", Network{}), alphabet };
-	TIMER(t);
-	hunter.Hunt();
-	STOP_LOG(t);
+	hunter.StartHunting();
+
+	// Create window
+	SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+	SetTraceLogLevel(LOG_NONE);
+	InitWindow(1280, 720, "SorterHunter");
+	SetTargetFPS(60);
+
+	// Render loop
+	while (!WindowShouldClose())
+	{
+		BeginDrawing();
+		ClearBackground(RAYWHITE);
+		if (hunter.HasFoundNetwork())
+			DrawNetwork(hunter.GetSmallestNetwork(), Config::GetInt("Ninputs"));
+		EndDrawing();
+	}
+
+	CloseWindow();
+	hunter.StopHunting();
 }

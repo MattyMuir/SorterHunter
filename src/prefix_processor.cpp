@@ -388,7 +388,7 @@ static bool isSorted(SortWord w, SortWord all_n_inputs_mask)
 	return (w & (w + 1)) == 0;
 }
 
-static inline void WriteBit(std::array<uint64_t, 4>& x, size_t pos, uint8_t bit)
+static inline void WriteBit(std::array<uint64_t, 4>& x, size_t pos, uint64_t bit)
 {
 	x[pos / 64] |= bit << (pos % 64);
 }

@@ -1,5 +1,0 @@
-Ninputs = 24
-Symmetric = 1
-RandomSeed = 0
-EscapeRate = 1000
-MaxMutations = 3

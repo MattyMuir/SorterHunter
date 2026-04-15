@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <thread>
 
 #include "types.h"
 #include "Network.h"
@@ -12,7 +13,10 @@ class SorterHunter
 public:
 	SorterHunter(const PrefixGenerator& prefixGenerator_, const Network& postfix_, const std::vector<CE>& alphabet_);
 
-	void Hunt(size_t maxEpochs = 0);
+	void StartHunting(size_t maxEpochs = 0);
+	void StopHunting();
+	bool HasFoundNetwork() const;
+	Network GetSmallestNetwork() const;
 
 protected:
 	// Constructor parameters
@@ -32,6 +36,9 @@ protected:
 	Network prefix;
 	std::vector<Network>networkCores;
 
+	bool shouldStop = false;
+	std::vector<std::thread> workers;
+
 	void HuntWorker(size_t threadIdx, size_t maxEpochs);
 
 	void PrepareTestVectors();
@@ -43,4 +50,5 @@ protected:
 	void LogEpoch(size_t threadIdx, size_t epoch);
 	void RegisterValidCore(Network& networkCore);
 	void UphillStep(Network& networkCore);
+	Network SanitizeNetwork(const Network network);
 };

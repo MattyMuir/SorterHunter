@@ -18,6 +18,7 @@ public:
 	void Clear();
 	bool AddEntry(const Network& totalNetwork, const Network& networkCore);
 	void Print() const;
+	bool IsEmpty() const;
 	Network GetSmallestNetwork() const;
 
 protected:
