@@ -1,6 +1,6 @@
 #include "NetworkMutator.h"
 
-#include "GlobalRandom.h"
+#include "Utility/GlobalRandom.h"
 
 NetworkMutator::NetworkMutator(const std::vector<CE>& alphabet_)
 	: alphabet(alphabet_)

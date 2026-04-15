@@ -1,7 +1,7 @@
 #include "PrefixGenerator.h"
 
-#include "print.h"
-#include "Config.h"
+#include "Utility/print.h"
+#include "Config/Config.h"
 #include "prefix_processor.h"
 
 PrefixGenerator::PrefixGenerator(PrefixType type_, const std::vector<CE>& alphabet_)

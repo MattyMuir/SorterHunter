@@ -31,11 +31,11 @@
 #include <algorithm>
 #include <array>
 
-#include "utils.h"
+#include "Utility/utils.h"
 #include "prefix_processor.h"
-#include "print.h"
-#include "Config.h"
-#include "GlobalRandom.h"
+#include "Utility/print.h"
+#include "Config/Config.h"
+#include "Utility/GlobalRandom.h"
 
 /**
  * Replaces a *sorted* list of patterns applied to a network containing a single CE by the sorted list of output patterns of that network.

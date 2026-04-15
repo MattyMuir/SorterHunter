@@ -1,9 +1,10 @@
+#pragma once
 /**
- * @file hutils.cpp
+ * @file utils.h
  * @brief Various utility functions for SorterHunter program
  * @author Bert Dobbelaere bert.o.dobbelaere[at]telenet[dot]be
  *
- * Copyright (c) 2017 Bert Dobbelaere
+ * Copyright (c) 2022 Bert Dobbelaere
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
  * files (the "Software"), to deal in the Software without
@@ -25,23 +26,14 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
-#include "utils.h"
 
-#include <cstdio>
+#include "Types/types.h"
+#include "Types/Network.h"
 
-#include "print.h"
-
-Network symmetricExpansion(uint8_t ninputs, const Network &inpairs)
-{
-	Network outpairs;
-	for (const CE& inpair : inpairs)
-	{
-		outpairs.push_back(inpair);
-		if (inpair.lo + inpair.hi == ninputs - 1) continue;
-
-		CE sp = { (uint8_t)(ninputs - 1 - inpair.hi), (uint8_t)(ninputs - 1 - inpair.lo) };
-		outpairs.push_back(sp);
-	}
-
-	return outpairs;
-}
+/**
+ * Create "symmetric" sorting network by creating a mirror image of each pair if it doesn't coincide with the original.
+ * @param ninputs Number of inputs
+ * @param inpairs Input network
+ * @param outpairs Symmetrical output network 
+ */
+Network SymmetricExpansion(uint8_t ninputs, const Network &inpairs);

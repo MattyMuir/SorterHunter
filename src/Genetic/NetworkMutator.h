@@ -1,6 +1,6 @@
 #pragma once
-#include "Network.h"
-#include "Config.h"
+#include "Types/Network.h"
+#include "Config/Config.h"
 
 class NetworkMutator
 {

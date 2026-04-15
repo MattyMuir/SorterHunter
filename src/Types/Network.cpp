@@ -1,7 +1,7 @@
 #include "Network.h"
 
 #include "types.h"
-#include "print.h"
+#include "Utility/print.h"
 
 Network Concatenate(const Network& a, const Network& b)
 {

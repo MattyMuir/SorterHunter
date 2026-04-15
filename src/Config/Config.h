@@ -5,8 +5,8 @@
 #include <stdexcept>
 #include <variant>
 
-#include "types.h"
-#include "Network.h"
+#include "Types/types.h"
+#include "Types/Network.h"
 
 enum Verbosity { VerbosityMinimal, VerbosityModerate, VerbosityHigh, VerbosityDebug };
 

@@ -1,5 +1,5 @@
 #pragma once
-#include "Network.h"
+#include "Types/Network.h"
 
 enum PrefixType { PrefixNone, PrefixFixed, PrefixGreedy, PrefixHybrid };
 

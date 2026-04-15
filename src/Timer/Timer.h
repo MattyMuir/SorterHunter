@@ -1,7 +1,7 @@
 #pragma once
 #include <chrono>
 
-#include "print.h"
+#include "Utility/print.h"
 
 #define TIMER(name) Timer name
 #define STOP_LOG(name) { name.Stop(); PRINT("{} took: ", #name); name.Log(); }

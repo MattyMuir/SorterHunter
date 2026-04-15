@@ -27,7 +27,7 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "types.h"
+#include "Types/types.h"
 
 /**
  * Given a prefix containing of 0 or more network pairs, computes the possible outputs of the (partially ordered) output set.

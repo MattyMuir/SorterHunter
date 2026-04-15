@@ -14,14 +14,14 @@ std::vector<Network> SplitByLayers(const Network& network)
 	{
 		auto [lo, hi] = ce;
 		uint64_t ceChannels = (1ULL << lo) | (1ULL << hi);
-		int insertLayer;
+		int64_t insertLayer;
 		for (insertLayer = layers.size() - 1; insertLayer >= 0; insertLayer--)
 		{
 			if (usedChannels[insertLayer] & ceChannels) break;
 		}
 		insertLayer++;
 
-		if (insertLayer >= layers.size())
+		if (insertLayer >= std::ssize(layers))
 		{
 			usedChannels.push_back(0);
 			layers.push_back({});

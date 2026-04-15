@@ -2,11 +2,11 @@
 #include <cstdint>
 #include <thread>
 
-#include "types.h"
-#include "Network.h"
+#include "Types/types.h"
+#include "Types/Network.h"
 #include "NetworkMutator.h"
-#include "ConvexHull.h"
-#include "PrefixGenerator.h"
+#include "Types/ConvexHull.h"
+#include "Prefix/PrefixGenerator.h"
 
 class SorterHunter
 {

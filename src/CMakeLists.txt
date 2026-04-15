@@ -1,18 +1,20 @@
 ﻿# EXECUTABLE PROJECT - SorterHunter
 
 # === Create Executable ===
-add_executable(SorterHunter   "types.h" "utils.h" "prefix_processor.h"  "utils.cpp" "prefix_processor.cpp" "print.h" "ConvexHull.h" "ConvexHull.cpp" "Config.h" "Config.cpp" "SorterHunter.h" "SorterHunter.cpp" "NetworkMutator.h" "NetworkMutator.cpp" "GlobalRandom.h"  "main.cpp" "version.h" "Network.h" "Network.cpp" "PrefixGenerator.h" "PrefixGenerator.cpp" "Timer.h"   "GlobalRandom.cpp" "rendering.h" "rendering.cpp")
+add_executable(SorterHunter   "Types/types.h" "Utility/utils.h" "Prefix/prefix_processor.h"  "Utility/utils.cpp" "Prefix/prefix_processor.cpp" "Utility/print.h" "Types/ConvexHull.h" "Types/ConvexHull.cpp" "Config/Config.h" "Config/Config.cpp" "Genetic/SorterHunter.h" "Genetic/SorterHunter.cpp" "Genetic/NetworkMutator.h" "Genetic/NetworkMutator.cpp" "Utility/GlobalRandom.h"  "main.cpp" "Utility/version.h" "Types/Network.h" "Types/Network.cpp" "Prefix/PrefixGenerator.h" "Prefix/PrefixGenerator.cpp" "Timer/Timer.h"   "Utility/GlobalRandom.cpp" "UI/rendering.h" "UI/rendering.cpp")
 
-if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND UNIX)
-    target_compile_options(SorterHunter PRIVATE -stdlib=libc++)
-    target_link_options(SorterHunter PRIVATE -stdlib=libc++)
-endif()
+target_include_directories(SorterHunter PRIVATE ".")
 
+# === Libraries ===
 find_package(Threads REQUIRED)
 find_package(raylib REQUIRED)
 target_link_libraries(SorterHunter PRIVATE Threads::Threads raylib winmm)
 
 # === Feature Enables ===
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND UNIX)
+    target_compile_options(SorterHunter PRIVATE -stdlib=libc++)
+    target_link_options(SorterHunter PRIVATE -stdlib=libc++)
+endif()
 if (SH_MSVC_STATIC_RUNTIME)
     set_property(TARGET SorterHunter PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif ()

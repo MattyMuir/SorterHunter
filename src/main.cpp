@@ -1,13 +1,13 @@
 #include <raylib.h>
 
-#include "version.h"
-#include "print.h"
-#include "Config.h"
-#include "GlobalRandom.h"
-#include "SorterHunter.h"
-#include "PrefixGenerator.h"
-#include "Timer.h"
-#include "rendering.h"
+#include "Utility/version.h"
+#include "Utility/print.h"
+#include "Config/Config.h"
+#include "Utility/GlobalRandom.h"
+#include "Genetic/SorterHunter.h"
+#include "Prefix/PrefixGenerator.h"
+#include "Timer/Timer.h"
+#include "UI/rendering.h"
 
 int PrintUsage()
 {

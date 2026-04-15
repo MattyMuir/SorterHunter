@@ -4,12 +4,12 @@
 #include <thread>
 #include <algorithm>
 
-#include "version.h"
-#include "print.h"
-#include "Config.h"
-#include "prefix_processor.h"
-#include "GlobalRandom.h"
-#include "utils.h"
+#include "Utility/version.h"
+#include "Utility/print.h"
+#include "Config/Config.h"
+#include "Prefix/prefix_processor.h"
+#include "Utility/GlobalRandom.h"
+#include "Utility/utils.h"
 
 SorterHunter::SorterHunter(const PrefixGenerator& prefixGenerator_, const Network& postfix_, const std::vector<CE>& alphabet_)
 	: prefixGenerator(prefixGenerator_),
@@ -79,7 +79,7 @@ void SorterHunter::HuntWorker(size_t threadIdx, size_t maxEpochs)
 		mutator.MutateMulti(mutatedCore, maxMutations);
 
 		// Symmetrically expand new network and add postfix
-		Network mutatedWithPostfix = symmetric ? symmetricExpansion(N, mutatedCore) : mutatedCore;
+		Network mutatedWithPostfix = symmetric ? SymmetricExpansion(N, mutatedCore) : mutatedCore;
 		mutatedWithPostfix = Concatenate(mutatedWithPostfix, postfix);
 
 		// Test if this network is a valid sorter
@@ -120,7 +120,7 @@ void SorterHunter::ProduceInitialSolution(Network& networkCore)
 	for (;;)
 	{
 		// Symmetrically expand the network and concatenate with the postfix
-		Network se = symmetric ? symmetricExpansion(N, networkCore) : networkCore;
+		Network se = symmetric ? SymmetricExpansion(N, networkCore) : networkCore;
 		se = Concatenate(se, postfix);
 
 		// Test the network
@@ -293,7 +293,7 @@ void SorterHunter::LogEpoch(size_t threadIdx, size_t epoch)
 void SorterHunter::RegisterValidCore(Network& networkCore)
 {
 	// Concatenate with prefix and postfix and calculate properties
-	Network totalNetwork = symmetric ? symmetricExpansion(N, networkCore) : networkCore;
+	Network totalNetwork = symmetric ? SymmetricExpansion(N, networkCore) : networkCore;
 	totalNetwork = Concatenate(prefix, Concatenate(totalNetwork, postfix));
 
 	// Check if this network improves the convex hull

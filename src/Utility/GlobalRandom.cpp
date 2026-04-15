@@ -2,7 +2,7 @@
 
 #include <atomic>
 
-#include "Config.h"
+#include "Config/Config.h"
 
 std::atomic<size_t> threadIdx = 0;
 
