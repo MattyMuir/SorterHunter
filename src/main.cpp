@@ -4,7 +4,7 @@
 #include "Utility/print.h"
 #include "Config/Config.h"
 #include "Utility/GlobalRandom.h"
-#include "Genetic/SorterHunter.h"
+#include "Genetic/SimpleGeneticHunter.h"
 #include "Prefix/PrefixGenerator.h"
 #include "Timer/Timer.h"
 #include "UI/rendering.h"
@@ -62,7 +62,7 @@ int main(int argc, char** argv)
 
 	// Hunt for efficient sorting networks
 	PrefixGenerator prefixGenerator{ (PrefixType)Config::GetInt("PrefixType", 0), alphabet };
-	SorterHunter hunter{ prefixGenerator, Config::GetNetwork("Postfix", Network{}), alphabet };
+	SimpleGeneticHunter hunter{ prefixGenerator, Config::GetNetwork("Postfix", Network{}), alphabet };
 	hunter.StartHunting();
 
 	// Create window

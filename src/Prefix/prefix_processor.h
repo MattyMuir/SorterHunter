@@ -28,6 +28,7 @@
  */
 
 #include "Types/types.h"
+#include "Types/Network.h"
 
 /**
  * Given a prefix containing of 0 or more network pairs, computes the possible outputs of the (partially ordered) output set.

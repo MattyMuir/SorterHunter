@@ -1,7 +1,7 @@
 ﻿# EXECUTABLE PROJECT - SorterHunter
 
 # === Create Executable ===
-add_executable(SorterHunter   "Types/types.h" "Utility/utils.h" "Prefix/prefix_processor.h"  "Utility/utils.cpp" "Prefix/prefix_processor.cpp" "Utility/print.h" "Types/ConvexHull.h" "Types/ConvexHull.cpp" "Config/Config.h" "Config/Config.cpp" "Genetic/SorterHunter.h" "Genetic/SorterHunter.cpp" "Genetic/NetworkMutator.h" "Genetic/NetworkMutator.cpp" "Utility/GlobalRandom.h"  "main.cpp" "Utility/version.h" "Types/Network.h" "Types/Network.cpp" "Prefix/PrefixGenerator.h" "Prefix/PrefixGenerator.cpp" "Timer/Timer.h"   "Utility/GlobalRandom.cpp" "UI/rendering.h" "UI/rendering.cpp")
+add_executable(SorterHunter   "Types/types.h"  "Prefix/prefix_processor.h"   "Prefix/prefix_processor.cpp" "Utility/print.h" "Types/ConvexHull.h" "Types/ConvexHull.cpp" "Config/Config.h" "Config/Config.cpp" "Genetic/SimpleGeneticHunter.h" "Genetic/SimpleGeneticHunter.cpp" "Genetic/NetworkMutator.h" "Genetic/NetworkMutator.cpp" "Utility/GlobalRandom.h"  "main.cpp" "Utility/version.h" "Types/Network.h" "Types/Network.cpp" "Prefix/PrefixGenerator.h" "Prefix/PrefixGenerator.cpp" "Timer/Timer.h"   "Utility/GlobalRandom.cpp" "UI/rendering.h" "UI/rendering.cpp" "Genetic/AntColonyHunter.h" "Genetic/AntColonyHunter.cpp" "SorterHunter.h" "SorterHunter.cpp")
 
 target_include_directories(SorterHunter PRIVATE ".")
 

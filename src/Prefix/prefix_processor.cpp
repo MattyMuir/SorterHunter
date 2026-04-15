@@ -31,7 +31,6 @@
 #include <algorithm>
 #include <array>
 
-#include "Utility/utils.h"
 #include "prefix_processor.h"
 #include "Utility/print.h"
 #include "Config/Config.h"
