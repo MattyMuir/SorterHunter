@@ -1,0 +1,2 @@
+Ninputs = 9
+Symmetric = 0

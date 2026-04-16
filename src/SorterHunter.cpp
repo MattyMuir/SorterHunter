@@ -13,6 +13,16 @@ SorterHunter::SorterHunter(const PrefixGenerator& prefixGenerator_, const Networ
 	symmetric(Config::GetInt("Symmetric", 0))
 {}
 
+bool SorterHunter::HasFoundNetwork() const
+{
+	return !convexHull.IsEmpty();
+}
+
+Network SorterHunter::GetSmallestNetwork() const
+{
+	return convexHull.GetSmallestNetwork();
+}
+
 void SorterHunter::PrepareTestVectors()
 {
 	if (Config::Verbosity() >= VerbosityHigh) PRINT("{:<50}\r", "Preparing test vectors...");
@@ -93,6 +103,61 @@ bool SorterHunter::TestNetwork(const Network& network, SortWord* problemOutput)
 	}
 
 	return true;
+}
+
+static inline size_t Popcount(__m256i x)
+{
+	return std::popcount((uint64_t)_mm256_extract_epi64(x, 0))
+		+ std::popcount((uint64_t)_mm256_extract_epi64(x, 1))
+		+ std::popcount((uint64_t)_mm256_extract_epi64(x, 2))
+		+ std::popcount((uint64_t)_mm256_extract_epi64(x, 3));
+}
+
+double SorterHunter::UnsortedFraction(const Network& network)
+{
+	size_t unsortedNum = 0;
+
+	for (size_t groupIdx = 0; groupIdx < testVectors.size() / N; groupIdx++)
+	{
+		// Copy this group into 'currentGroup'
+		BPWord currentGroup[NMAX];
+		memcpy(currentGroup, testVectors.data() + groupIdx * N, N * sizeof(BPWord));
+
+		// Sort PARWORDSIZE inputs in parallel
+		RunNetwork(network, currentGroup);
+
+		// Scan for forbidden 1 -> 0 transition
+		BPWord accum = _mm256_setzero_si256();
+		for (size_t k = 0; k < (N - 1u); k++)
+			accum = _mm256_or_si256(accum, _mm256_andnot_si256(currentGroup[k + 1], currentGroup[k]));
+
+		unsortedNum += Popcount(accum);
+	}
+
+	size_t numInputs = (testVectors.size() / N) * 256;
+	return (double)unsortedNum / numInputs;
+}
+
+size_t SorterHunter::NumInversions(const Network& network)
+{
+	size_t numInversions = 0;
+
+	for (size_t groupIdx = 0; groupIdx < testVectors.size() / N; groupIdx++)
+	{
+		// Copy this group into 'currentGroup'
+		BPWord currentGroup[NMAX];
+		memcpy(currentGroup, testVectors.data() + groupIdx * N, N * sizeof(BPWord));
+
+		// Sort PARWORDSIZE inputs in parallel
+		RunNetwork(network, currentGroup);
+
+		// Count inversions
+		BPWord accum = _mm256_setzero_si256();
+		for (size_t k = 0; k < (N - 1u); k++)
+			numInversions += Popcount(_mm256_andnot_si256(currentGroup[k + 1], currentGroup[k]));
+	}
+
+	return numInversions;
 }
 
 void SorterHunter::RegisterValidCore(Network& networkCore)

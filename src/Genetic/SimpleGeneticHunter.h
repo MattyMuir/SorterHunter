@@ -14,10 +14,8 @@ class SimpleGeneticHunter : public SorterHunter
 public:
 	SimpleGeneticHunter(const PrefixGenerator& prefixGenerator_, const Network& postfix_, const std::vector<CE>& alphabet_);
 
-	void StartHunting(size_t maxEpochs = 0);
-	void StopHunting();
-	bool HasFoundNetwork() const;
-	Network GetSmallestNetwork() const;
+	void StartHunting(size_t maxEpochs) override;
+	void StopHunting() override;
 
 protected:
 	// Config parameters

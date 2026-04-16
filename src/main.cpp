@@ -4,10 +4,13 @@
 #include "Utility/print.h"
 #include "Config/Config.h"
 #include "Utility/GlobalRandom.h"
-#include "Genetic/SimpleGeneticHunter.h"
 #include "Prefix/PrefixGenerator.h"
 #include "Timer/Timer.h"
 #include "UI/rendering.h"
+
+// Hunters
+#include "Genetic/SimpleGeneticHunter.h"
+#include "Ants/AntColonyHunter.h"
 
 int PrintUsage()
 {
@@ -62,8 +65,8 @@ int main(int argc, char** argv)
 
 	// Hunt for efficient sorting networks
 	PrefixGenerator prefixGenerator{ (PrefixType)Config::GetInt("PrefixType", 0), alphabet };
-	SimpleGeneticHunter hunter{ prefixGenerator, Config::GetNetwork("Postfix", Network{}), alphabet };
-	hunter.StartHunting();
+	std::unique_ptr<SorterHunter> hunter = std::make_unique<AntColonyHunter>(prefixGenerator, Config::GetNetwork("Postfix", Network{}), alphabet);
+	hunter->StartHunting();
 
 	// Create window
 	SetConfigFlags(FLAG_WINDOW_RESIZABLE);
@@ -76,11 +79,11 @@ int main(int argc, char** argv)
 	{
 		BeginDrawing();
 		ClearBackground(RAYWHITE);
-		if (hunter.HasFoundNetwork())
-			DrawNetwork(hunter.GetSmallestNetwork(), Config::GetInt("Ninputs"));
+		if (hunter->HasFoundNetwork())
+			DrawNetwork(hunter->GetSmallestNetwork(), Config::GetInt("Ninputs"));
 		EndDrawing();
 	}
 
 	CloseWindow();
-	hunter.StopHunting();
+	hunter->StopHunting();
 }

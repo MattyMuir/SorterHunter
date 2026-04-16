@@ -40,16 +40,6 @@ void SimpleGeneticHunter::StopHunting()
 	for (auto& worker : workers) worker.join();
 }
 
-bool SimpleGeneticHunter::HasFoundNetwork() const
-{
-	return !convexHull.IsEmpty();
-}
-
-Network SimpleGeneticHunter::GetSmallestNetwork() const
-{
-	return convexHull.GetSmallestNetwork();
-}
-
 void SimpleGeneticHunter::HuntWorker(size_t threadIdx, size_t maxEpochs)
 {
 	Network& networkCore = networkCores[threadIdx];

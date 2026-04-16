@@ -8,9 +8,13 @@ class SorterHunter
 {
 public:
 	SorterHunter(const PrefixGenerator& prefixGenerator_, const Network& postfix_, const std::vector<CE>& alphabet_);
+	virtual ~SorterHunter() = default;
 
 	virtual void StartHunting(size_t maxEpochs = 0) = 0;
 	virtual void StopHunting() = 0;
+
+	bool HasFoundNetwork() const;
+	Network GetSmallestNetwork() const;
 
 protected:
 	// Constructor parameters
@@ -30,6 +34,8 @@ protected:
 	void PrepareTestVectors();
 	static void RunNetwork(const Network& network, BPWord* inputs);
 	bool TestNetwork(const Network& network, SortWord* problemOutput = nullptr);
+	double UnsortedFraction(const Network& network);
+	size_t NumInversions(const Network& network);
 	void RegisterValidCore(Network& networkCore);
 	Network SymmetricExpansion(const Network& network) const;
 	Network SanitizeNetwork(const Network network) const;
