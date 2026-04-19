@@ -1,14 +1,24 @@
 ﻿# EXECUTABLE PROJECT - SorterHunter
 
 # === Create Executable ===
-add_executable(SorterHunter   "Types/types.h"  "Prefix/prefix_processor.h"   "Prefix/prefix_processor.cpp" "Utility/print.h" "Types/ConvexHull.h" "Types/ConvexHull.cpp" "Config/Config.h" "Config/Config.cpp" "Genetic/SimpleGeneticHunter.h" "Genetic/SimpleGeneticHunter.cpp" "Genetic/NetworkMutator.h" "Genetic/NetworkMutator.cpp" "Utility/GlobalRandom.h"  "main.cpp" "Utility/version.h" "Types/Network.h" "Types/Network.cpp" "Prefix/PrefixGenerator.h" "Prefix/PrefixGenerator.cpp" "Timer/Timer.h"   "Utility/GlobalRandom.cpp" "UI/rendering.h" "UI/rendering.cpp" "Ants/AntColonyHunter.h" "Ants/AntColonyHunter.cpp" "SorterHunter.h" "SorterHunter.cpp" "Ants/CEGraph.h" "Ants/WeightedSampler.h" "Ants/WeightedSampler.cpp" "Ants/CEGraph.cpp")
+add_executable(SorterHunter   "Types/types.h"  "Prefix/prefix_processor.h"   "Prefix/prefix_processor.cpp" "Utility/print.h" "Types/ConvexHull.h" "Types/ConvexHull.cpp" "Config/Config.h" "Config/Config.cpp" "Genetic/SimpleGeneticHunter.h" "Genetic/SimpleGeneticHunter.cpp" "Genetic/NetworkMutator.h" "Genetic/NetworkMutator.cpp" "Utility/GlobalRandom.h"  "main.cpp" "Utility/version.h" "Types/Network.h" "Types/Network.cpp" "Prefix/PrefixGenerator.h" "Prefix/PrefixGenerator.cpp" "Timer/Timer.h"   "Utility/GlobalRandom.cpp" "UI/rendering.h" "Ants/AntColonyHunter.h" "Ants/AntColonyHunter.cpp" "SorterHunter.h" "SorterHunter.cpp" "Ants/CEGraph.h" "Ants/WeightedSampler.h" "Ants/WeightedSampler.cpp" "Ants/CEGraph.cpp")
 
 target_include_directories(SorterHunter PRIVATE ".")
 
 # === Libraries ===
 find_package(Threads REQUIRED)
-find_package(raylib REQUIRED)
-target_link_libraries(SorterHunter PRIVATE Threads::Threads raylib winmm)
+target_link_libraries(SorterHunter PRIVATE Threads::Threads winmm)
+
+option(ENABLE_GUI "Enable the raylib GUI" ON)
+if (ENABLE_GUI)
+    target_sources(SorterHunter PRIVATE
+        "UI/rendering.cpp"
+    )
+
+    find_package(raylib REQUIRED)
+    target_compile_definitions(SorterHunter PRIVATE ENABLE_GUI)
+    target_link_libraries(SorterHunter PRIVATE raylib winmm)
+endif()
 
 # === Feature Enables ===
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND UNIX)

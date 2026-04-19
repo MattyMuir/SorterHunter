@@ -5,6 +5,8 @@
 
 #include <raylib.h>
 
+#include "Config/Config.h"
+
 std::vector<Network> SplitByLayers(const Network& network)
 {
 	std::vector<uint64_t> usedChannels;
@@ -73,6 +75,27 @@ int ToScreenX(float x, int padding = 40)
 int ToScreenY(float y, int padding = 40)
 {
 	return padding + y * (GetScreenHeight() - padding * 2);
+}
+
+void MainUILoop(std::unique_ptr<SorterHunter>& hunter)
+{
+	// Create window
+	SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+	SetTraceLogLevel(LOG_NONE);
+	InitWindow(1280, 720, "SorterHunter");
+	SetTargetFPS(60);
+
+	// Render loop
+	while (!WindowShouldClose())
+	{
+		BeginDrawing();
+		ClearBackground(RAYWHITE);
+		if (hunter->HasFoundNetwork())
+			DrawNetwork(hunter->GetSmallestNetwork(), Config::GetInt("Ninputs"));
+		EndDrawing();
+	}
+
+	CloseWindow();
 }
 
 void DrawNetwork(const Network& network, uint8_t N)

@@ -1,0 +1,8 @@
+Ninputs = 28
+Symmetric = 1
+
+EscapeRate = 1000
+MaxMutations = 2
+
+PrefixType = 1
+FixedPrefix = (2,11),(16,25),(0,7),(20,27),(1,8),(19,26),(0,24),(3,27),(4,6),(21,23),(10,15),(12,17),(9,14),(13,18)

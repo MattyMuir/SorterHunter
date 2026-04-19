@@ -1,5 +1,3 @@
-#include <raylib.h>
-
 #include "Utility/version.h"
 #include "Utility/print.h"
 #include "Config/Config.h"
@@ -65,25 +63,14 @@ int main(int argc, char** argv)
 
 	// Hunt for efficient sorting networks
 	PrefixGenerator prefixGenerator{ (PrefixType)Config::GetInt("PrefixType", 0), alphabet };
-	std::unique_ptr<SorterHunter> hunter = std::make_unique<AntColonyHunter>(prefixGenerator, Config::GetNetwork("Postfix", Network{}), alphabet);
+	std::unique_ptr<SorterHunter> hunter = std::make_unique<SimpleGeneticHunter>(prefixGenerator, Config::GetNetwork("Postfix", Network{}), alphabet);
 	hunter->StartHunting();
 
-	// Create window
-	SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-	SetTraceLogLevel(LOG_NONE);
-	InitWindow(1280, 720, "SorterHunter");
-	SetTargetFPS(60);
+#ifdef ENABLE_GUI
+	MainUILoop(hunter);
+#else
+	std::this_thread::sleep_for(std::chrono::seconds{ 590 });
+#endif
 
-	// Render loop
-	while (!WindowShouldClose())
-	{
-		BeginDrawing();
-		ClearBackground(RAYWHITE);
-		if (hunter->HasFoundNetwork())
-			DrawNetwork(hunter->GetSmallestNetwork(), Config::GetInt("Ninputs"));
-		EndDrawing();
-	}
-
-	CloseWindow();
 	hunter->StopHunting();
 }

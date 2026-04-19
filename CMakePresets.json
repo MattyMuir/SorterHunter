@@ -10,7 +10,8 @@
 			"cacheVariables": {
 				"CMAKE_C_COMPILER": "C:/Program Files/LLVM/bin/clang.exe",
 				"CMAKE_CXX_COMPILER": "C:/Program Files/LLVM/bin/clang.exe",
-				"WARNINGS": "ON"
+				"WARNINGS": "ON",
+				"ENABLE_GUI": "OFF"
 			},
 			"condition": {
 				"type": "equals",
